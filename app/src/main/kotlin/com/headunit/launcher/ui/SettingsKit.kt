@@ -25,6 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -109,10 +112,15 @@ internal fun SItem(title: String, sub: String? = null, onClick: (() -> Unit)? = 
         hlMod = Modifier.bringIntoViewRequester(req).clip(RoundedCornerShape(14.dp)).drawBehind { drawRect(c.accent.copy(alpha = 0.18f * glow.value)) }
     }
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).then(hlMod).then(if (onClick != null) Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick) else Modifier).padding(vertical = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .then(hlMod)
+            .then(if (onClick != null) Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick) else Modifier)
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f, fill = false).padding(end = 12.dp)) {
+        Column(Modifier.weight(1f, fill = true).padding(end = 16.dp)) {
             Text(title, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             if (!sub.isNullOrBlank()) Text(sub, color = c.sub, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
@@ -124,7 +132,30 @@ internal fun SItem(title: String, sub: String? = null, onClick: (() -> Unit)? = 
 @Composable
 internal fun SToggle(prefs: Prefs, title: String, key: String, def: Boolean, sub: String? = null) {
     val on = prefs.b(key, def)
-    SItem(title, sub, onClick = { prefs.put(key, !on) }) { Switch(on, { prefs.put(key, it) }) }
+    val c = LocalVw.current
+    SItem(title, sub, onClick = { prefs.put(key, !on) }) {
+        Switch(
+            checked = on,
+            onCheckedChange = { prefs.put(key, it) },
+            thumbContent = if (on) {
+                {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            } else null,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = if (c.accent.luminance() > 0.6f) Color(0xFF10131C) else Color.White,
+                checkedTrackColor = c.accent,
+                checkedIconColor = c.accent,
+                uncheckedThumbColor = c.sub,
+                uncheckedTrackColor = c.tile,
+                uncheckedBorderColor = Color.Transparent
+            )
+        )
+    }
 }
 
 /** A row of choices with MD3 expressive connected button group styling and corner morphing. */

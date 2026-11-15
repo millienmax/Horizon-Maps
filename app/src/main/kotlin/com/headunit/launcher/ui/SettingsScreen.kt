@@ -46,6 +46,8 @@ import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.HorizontalDivider
@@ -549,8 +551,29 @@ private fun SettingsBody(prefs: Prefs, engine: NavEngine, onClose: () -> Unit) {
 @Composable
 private fun MapStyleSection(prefs: Prefs, engine: NavEngine) {
     SGroup(L.t("Day and night")) {
-        SChoice(L.t("Day and night"), listOf("auto" to L.t("Auto"), "lights" to L.t("Headlights"), "sun" to L.t("Sun times"), "times" to L.t("My times"), "day" to L.t("Day"), "night" to L.t("Night")), prefs.s(PreferenceKeys.THEME, "auto"),
-            L.t("Auto follows the head unit's own night mode once it has switched to it, and sunrise and sunset until then. Headlights follows the head unit's night mode when it switches with your lights (turn on its headlight or illumination night-mode option), with sun times until then. Sun times switches at sunrise and sunset. My times switches at the times you set")) { prefs.put(PreferenceKeys.THEME, it) }
+        val themeVal = prefs.s(PreferenceKeys.THEME, "auto")
+        val themeSub = when (themeVal) {
+            "auto" -> L.t("Follows car headlights, or sunrise and sunset")
+            "lights" -> L.t("Follows vehicle headlights and illumination signal")
+            "sun" -> L.t("Switches automatically at sunrise and sunset")
+            "times" -> L.t("Switches at your scheduled times")
+            "day" -> L.t("Always uses daylight map style")
+            "night" -> L.t("Always uses dark night map style")
+            else -> null
+        }
+        SChoice(
+            L.t("Day and night"),
+            listOf(
+                "auto" to L.t("Auto"),
+                "lights" to L.t("Headlights"),
+                "sun" to L.t("Sun times"),
+                "times" to L.t("My times"),
+                "day" to L.t("Day"),
+                "night" to L.t("Night")
+            ),
+            themeVal,
+            themeSub
+        ) { prefs.put(PreferenceKeys.THEME, it) }
         // Headlights: whether this head unit has been seen switching with the lights yet (until then sun times stand in), and what the
         // lights signal says right now, so it's easy to check it works (lights on: it should say on within a couple of seconds)
         if (prefs.s(PreferenceKeys.THEME, "auto") == "lights") {
@@ -597,16 +620,34 @@ private fun MapStyleSection(prefs: Prefs, engine: NavEngine) {
     if (prefs.mapSource() == "mapbox" && prefs.s(PreferenceKeys.MAP_COLOURS, "mapbox") == "custom") CustomThemeGroup(prefs, engine)
     if (prefs.mapSource() == "mapbox") SavedThemesGroup(prefs)
     SGroup(L.t("The map")) {
-        SChoice(L.t("Map source"), listOf("mapbox" to L.t("Mapbox"), "tomtom" to L.t("TomTom"), "osm" to L.t("OpenStreetMap")), prefs.mapSource(),
-            L.t("Mapbox: the 3D map. TomTom: TomTom's map in the Horizon colours (needs a TomTom key). All need the Mapbox token, as Mapbox's engine draws them")) { prefs.put(PreferenceKeys.MAP_STYLE, it) }
+        val srcVal = prefs.mapSource()
+        val srcSub = when (srcVal) {
+            "mapbox" -> L.t("Full 3D buildings, terrain, and weather")
+            "tomtom" -> L.t("TomTom map styling (requires TomTom key)")
+            "osm" -> L.t("OpenStreetMap standard styling")
+            else -> null
+        }
+        SChoice(L.t("Map source"), listOf("mapbox" to L.t("Mapbox"), "tomtom" to L.t("TomTom"), "osm" to L.t("OpenStreetMap")), srcVal, srcSub) { prefs.put(PreferenceKeys.MAP_STYLE, it) }
         if (prefs.mapSource() == "mapbox") {
-            SChoice(L.t("Map detail"), listOf("full" to L.t("Full 3D"), "lite" to L.t("Lite"), "lightest" to L.t("Lightest")), prefs.mapDetail(),
-                L.t("Full 3D: buildings, landmarks, trees and shadows. Lite: flat buildings, no landmarks or shadows. Lightest: Mapbox's simpler 2D map, for slow head units")) { prefs.put(PreferenceKeys.MAP_DETAIL, it) }
+            val detailVal = prefs.mapDetail()
+            val detailSub = when (detailVal) {
+                "full" -> L.t("Buildings, landmarks, trees and realistic shadows")
+                "lite" -> L.t("Flat buildings with no landmarks or shadows")
+                "lightest" -> L.t("Fast 2D map for maximum performance")
+                else -> null
+            }
+            SChoice(L.t("Map detail"), listOf("full" to L.t("Full 3D"), "lite" to L.t("Lite"), "lightest" to L.t("Lightest")), detailVal, detailSub) { prefs.put(PreferenceKeys.MAP_DETAIL, it) }
         }
         DefaultZoomRow(prefs)
         SToggle(prefs, L.t("Footpaths and trails"), "paths", true, L.t("Turn off for a cleaner driving map"))
-        SChoice(L.t("HD roads"), listOf("auto" to L.t("Automatic"), "on" to L.t("On"), "off" to L.t("Off")), prefs.s(PreferenceKeys.HD_ROADS, "auto"),
-            sub = L.t("Lane markings, turn arrows and 3D overpasses where Mapbox has them (Full 3D). Automatic: on in the UK only, as in some countries they hide the ordinary streets")) { prefs.put(PreferenceKeys.HD_ROADS, it) }
+        val hdVal = prefs.s(PreferenceKeys.HD_ROADS, "auto")
+        val hdSub = when (hdVal) {
+            "auto" -> L.t("Automatically enabled where supported")
+            "on" -> L.t("Lane markings and 3D overpasses always on")
+            "off" -> L.t("Standard road markings")
+            else -> null
+        }
+        SChoice(L.t("HD roads"), listOf("auto" to L.t("Automatic"), "on" to L.t("On"), "off" to L.t("Off")), hdVal, sub = hdSub) { prefs.put(PreferenceKeys.HD_ROADS, it) }
     }
 }
 
@@ -680,7 +721,7 @@ private fun OnTheMapSection(prefs: Prefs, engine: NavEngine) {
 
 @Composable
 private fun ArrowSection(prefs: Prefs, engine: NavEngine) {
-    SGroup(L.t("Your arrow"), footer = L.t("Real 3D model: drawn in the map itself, lit and shadowed like the buildings (Full 3D only; otherwise the picture of the same shape is used). The 3D arrow and car are pictures of 3D shapes. The flat arrow is the lightest to draw on a slow unit.")) {
+    SGroup(L.t("Your arrow"), footer = L.t("Real 3D models require Full 3D map detail. Flat arrow offers lowest power draw.")) {
         val loc = prefs.s(PreferenceKeys.LOCATOR, "arrow")
         val ctx = LocalContext.current
         val hasPic = prefs.s(PreferenceKeys.LOCATOR_IMAGE, "").isNotBlank() && java.io.File(ctx.filesDir, "locator.png").exists()
@@ -780,7 +821,7 @@ private fun RoutesSection(prefs: Prefs, engine: NavEngine) {
         // ...or only in some countries: a route that would use a toll road in one of them is planned without toll roads
         if (!prefs.b(PreferenceKeys.AVOID_TOLL, false)) {
             val chosen = prefs.s(PreferenceKeys.AVOID_TOLL_COUNTRIES, "").split(',').filter { it.isNotBlank() }.toSet()
-            SItem(L.t("Avoid tolls only in"), if (chosen.isEmpty()) L.t("Pick countries: a route that would pay a toll in one of them is planned without toll roads") else L.t("A route that would pay a toll in one of these is planned without toll roads"))
+            SItem(L.t("Avoid tolls only in"), if (chosen.isEmpty()) L.t("None selected") else L.t("{0} countries selected", chosen.size))
             androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for ((cc, name) in listOf("FR" to L.t("France"), "IT" to L.t("Italy"), "ES" to L.t("Spain"), "PT" to L.t("Portugal"), "AT" to L.t("Austria"), "CH" to L.t("Switzerland"),
@@ -797,12 +838,12 @@ private fun RoutesSection(prefs: Prefs, engine: NavEngine) {
     }
     SGroup(L.t("Choosing a route")) {
         SToggle(prefs, L.t("Eco routes"), "route_eco", false, L.t("Fuel-efficient instead of fastest"))
-        SToggle(prefs, L.t("Prefer simpler routes"), "prefer_simple", true, L.t("When a route is only a minute or so slower but has far fewer turns, it's picked first (labelled Simplest). Off always picks the fastest"))
+        SToggle(prefs, L.t("Prefer simpler routes"), "prefer_simple", true, L.t("Favors routes with fewer turns"))
         SToggle(prefs, L.t("Offer faster routes"), "fasterroute", true)
-        if (prefs.b(PreferenceKeys.FASTER_ROUTE, true)) SToggle(prefs, L.t("Keep other routes on the map"), "livealts", true, L.t("Grey lines with +/− minutes you can tap any time. Off shows a \"Faster route found\" card instead"))
-        SToggle(prefs, L.t("Suggest where you're going"), "predict", true, L.t("With the live journey time, including home and work at your usual times"))
+        if (prefs.b(PreferenceKeys.FASTER_ROUTE, true)) SToggle(prefs, L.t("Keep other routes on the map"), "livealts", true, L.t("Shows tap-able alternative route lines"))
+        SToggle(prefs, L.t("Suggest where you're going"), "predict", true, L.t("Predicts destinations like home and work with live ETA"))
         SToggle(prefs, L.t("Weather on the route"), "routewx", true)
-        SToggle(prefs, L.t("Arrive on your side of the road"), PreferenceKeys.ARRIVE_SIDE, true, L.t("The route brings you to the kerb side of where you're going, so you don't have to cross the traffic. Mapbox and offline routes"))
+        SToggle(prefs, L.t("Arrive on your side of the road"), PreferenceKeys.ARRIVE_SIDE, true, L.t("Brings you to the kerb side of your destination"))
     }
     SGroup(L.t("Starting a route")) {
         SToggle(prefs, L.t("Auto-start route countdown"), PreferenceKeys.AUTO_START_ROUTE, true, L.t("Automatically start navigation when the countdown finishes"))
@@ -816,7 +857,7 @@ private fun RoutesSection(prefs: Prefs, engine: NavEngine) {
 @Composable
 private fun VehicleGroup(prefs: Prefs, imperial: Boolean) {
     val lorry = prefs.s(PreferenceKeys.VEHICLE, "car") == "lorry"
-    SGroup(L.t("Vehicle"), footer = if (lorry) L.t("Used by TomTom and offline routes, and by Mapbox for height, width and weight. Limits come from the map data, so some may be missing: always follow the road signs.") else null) {
+    SGroup(L.t("Vehicle"), footer = if (lorry) L.t("Routes check map data against your vehicle dimensions. Always follow road signs.") else null) {
         SChoice(L.t("Vehicle"), listOf("car" to L.t("Car"), "lorry" to L.t("Lorry")), if (lorry) "lorry" else "car",
             if (lorry) L.t("Routes avoid low bridges, weight limits and lorry bans for your size") else null) { prefs.put(PreferenceKeys.VEHICLE, it) }
         if (lorry) {
@@ -937,7 +978,7 @@ private fun GuidanceSection(prefs: Prefs, engine: NavEngine) {
 private fun ZonesItem() {
     val ctx = LocalContext.current
     val sc = rememberCoroutineScope()
-    var st by remember { mutableStateOf(Zones.all(ctx).let { z -> if (z.isEmpty()) L.t("Not downloaded yet") else "${z.size} zones: " + z.joinToString(", ") { it.name }.take(140) }) }
+    var st by remember { mutableStateOf(Zones.all(ctx).let { z -> if (z.isEmpty()) L.t("Not downloaded yet") else L.t("{0} zones downloaded", z.size) }) }
     var busy by remember { mutableStateOf(false) }
     SItem(L.t("Clean air zones on this unit"), st) {
         SButton(if (busy) L.t("Updating…") else L.t("Update")) {
@@ -1130,7 +1171,7 @@ private fun DefaultZoomRow(prefs: Prefs) {
     var v by remember(saved) { mutableStateOf(saved) }
     fun save(x: Float) = prefs.put(PreferenceKeys.DEFAULT_ZOOM, String.format(java.util.Locale.US, "%.2f", x))
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        SItem(L.t("Default zoom"), L.t("When you're not on a route. Auto zoom still pulls out at speed and moves in at junctions, round your setting. Or zoom with + and − on the map and tap \"Make this my default\"")) {
+        SItem(L.t("Default zoom"), L.t("Base zoom level when cruising without active navigation")) {
             if (kotlin.math.abs(v) > 0.01f) SButton(L.t("Reset")) { v = 0f; save(0f) }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1675,28 +1716,70 @@ private fun MapColoursPicker(value: String, onPick: (String) -> Unit) {
         Triple("car", L.t("Match my car"), listOf(0xFF1A1424, 0xFF14182C, 0xFF232C30, 0xFF5A4A6E, 0xFF2A2240)),
         Triple("custom", L.t("Custom"), listOf(0xFF26304C, 0xFF2F6FB0, 0xFF3F7A5A, 0xFF8A93AE, 0xFFE0A84A)),
     )
+    val activeSub = when (value) {
+        "mapbox" -> L.t("Default Mapbox map style")
+        "horizon" -> L.t("Soft slate tones with deep blue night style")
+        "twilight" -> L.t("Deep twilight purple night tones")
+        "faded" -> L.t("Soft muted pastel tones")
+        "grey" -> L.t("Neutral grayscale street map")
+        "ember" -> L.t("Warm amber tones")
+        "mono" -> L.t("Minimalist grayscale with colored route lines")
+        "forest" -> L.t("Natural earthy green tones")
+        "arctic" -> L.t("Cool high-clarity icy blue tones")
+        "contrast" -> L.t("High-contrast daytime visibility")
+        "sepia" -> L.t("Warm classic paper map tones")
+        "neon" -> L.t("Vibrant modern street styling")
+        "pastel" -> L.t("Gentle soft daylight tones")
+        "car" -> L.t("Matches your car's interior ambient lighting")
+        "custom" -> L.t("Your personalized custom color palette")
+        else -> L.t("Curated map theme palette")
+    }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        SItem(L.t("Colours"), L.t("Horizon: Mapbox's map in the app's own soft colours, slate blue at night. Twilight: the same with a deeper purple night. Mono Night: greys, with only the route and warnings in colour. Match my car: a hint of your car's interior lighting colour. Custom: your own colours. Day colours shown (Match my car at night); each has a night version"))
+        SItem(L.t("Colours"), activeSub)
         Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             for ((id, name, cols) in sets) {
                 val sel = id == value
                 Column(
-                    Modifier.width(124.dp).clip(RoundedCornerShape(14.dp)).background(c.tile)
-                        .border(2.dp, if (sel) c.accent else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(14.dp))
-                        .clickable { onPick(id) },
+                    Modifier.width(124.dp).clip(RoundedCornerShape(16.dp)).background(c.tile)
+                        .border(if (sel) 2.dp else 0.dp, if (sel) c.accent else Color.Transparent, RoundedCornerShape(16.dp))
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = androidx.compose.material3.ripple(),
+                            onClick = { onPick(id) }
+                        ),
                 ) {
-                    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(76.dp)) {
-                        val w = size.width; val h = size.height
-                        fun col(i: Int) = androidx.compose.ui.graphics.Color(cols[i])
-                        drawRect(col(0))
-                        drawRect(col(1), topLeft = androidx.compose.ui.geometry.Offset(w * 0.68f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.32f, h * 0.3f))
-                        drawRect(col(2), topLeft = androidx.compose.ui.geometry.Offset(w * 0.06f, h * 0.62f), size = androidx.compose.ui.geometry.Size(w * 0.24f, h * 0.26f))
-                        drawRect(col(4), topLeft = androidx.compose.ui.geometry.Offset(w * 0.47f, h * 0.1f), size = androidx.compose.ui.geometry.Size(w * 0.18f, h * 0.2f))
-                        drawRect(col(3), topLeft = androidx.compose.ui.geometry.Offset(0f, h * 0.44f), size = androidx.compose.ui.geometry.Size(w, h * 0.12f))
-                        drawRect(col(3), topLeft = androidx.compose.ui.geometry.Offset(w * 0.36f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.06f, h))
-                        drawRect(androidx.compose.ui.graphics.Color(0xFF2A7BE4), topLeft = androidx.compose.ui.geometry.Offset(w * 0.68f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.05f, h))
+                    Box {
+                        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(76.dp)) {
+                            val w = size.width; val h = size.height
+                            fun col(i: Int) = androidx.compose.ui.graphics.Color(cols[i])
+                            drawRect(col(0))
+                            drawRect(col(1), topLeft = androidx.compose.ui.geometry.Offset(w * 0.68f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.32f, h * 0.3f))
+                            drawRect(col(2), topLeft = androidx.compose.ui.geometry.Offset(w * 0.06f, h * 0.62f), size = androidx.compose.ui.geometry.Size(w * 0.24f, h * 0.26f))
+                            drawRect(col(4), topLeft = androidx.compose.ui.geometry.Offset(w * 0.47f, h * 0.1f), size = androidx.compose.ui.geometry.Size(w * 0.18f, h * 0.2f))
+                            drawRect(col(3), topLeft = androidx.compose.ui.geometry.Offset(0f, h * 0.44f), size = androidx.compose.ui.geometry.Size(w, h * 0.12f))
+                            drawRect(col(3), topLeft = androidx.compose.ui.geometry.Offset(w * 0.36f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.06f, h))
+                            drawRect(androidx.compose.ui.graphics.Color(0xFF2A7BE4), topLeft = androidx.compose.ui.geometry.Offset(w * 0.68f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.05f, h))
+                        }
+                        if (sel) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(6.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(c.accent),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    null,
+                                    tint = if (c.accent.luminance() > 0.6f) Color(0xFF10131C) else Color.White,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
                     }
-                    Text(name, color = c.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+                    Text(name, color = if (sel) c.accent else c.text, fontSize = 13.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
                 }
             }
         }
