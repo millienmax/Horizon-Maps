@@ -1921,28 +1921,6 @@ private fun ImmSearch(
                     }
 
                     if (q.isEmpty()) {
-                        if (!searchActive) {
-                            val open = engine.prefs.b(PreferenceKeys.QUICKLIST, false)
-                            Box(
-                                Modifier
-                                    .padding(end = 4.dp)
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = androidx.compose.material3.ripple(),
-                                        onClick = { engine.prefs.put(PreferenceKeys.QUICKLIST, !open) }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
-                                    if (open) L.t("Hide saved and recent") else L.t("Show saved and recent"),
-                                    tint = c.sub,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
                         Box(
                             Modifier
                                 .padding(end = 8.dp)
@@ -2380,24 +2358,8 @@ private fun ParkedCard(engine: NavEngine) {
 
 /** Resume a trip, a suggested trip, and saved & recent places. */
 @Composable
-private fun ImmQuick(engine: NavEngine, showSaved: Boolean = true) {
+private fun ImmQuick(engine: NavEngine, @Suppress("UNUSED_PARAMETER") showSaved: Boolean = false) {
     val c = LocalVw.current
-    val rawCustom = engine.prefs.s(PreferenceKeys.PLACES_CUSTOM, "")
-    val rawFav = engine.prefs.s(PreferenceKeys.PLACES_FAVOURITES, "")
-    val rawRecent = engine.prefs.s(PreferenceKeys.PLACES_RECENT, "")
-    val rawRoutes = engine.prefs.s(PreferenceKeys.PLACES_ROUTES, "[]")
-    val routes = remember(rawRoutes) { engine.savedRoutes() }
-    // (kind 0 = one of your own labelled places, 1 = a favourite, 2 = recent, 3 = a saved route; the label is the name shown)
-    val saved: List<Triple<com.headunit.launcher.Place, Int, String>> = remember(rawCustom, rawFav, rawRecent, routes) {
-        val mine = engine.places.customs()
-        val favs = engine.places.favourites().filter { f -> mine.none { Geo.dist(it.place.pos, f.pos) < 60 } }
-        val recents = engine.places.recents().filter { r -> favs.none { Geo.dist(it.pos, r.pos) < 60 } && mine.none { Geo.dist(it.place.pos, r.pos) < 60 } }
-        mine.map { Triple(it.place, 0, it.label) } + routes.map { Triple(it.dest, 3, it.name) } + favs.map { Triple(it, 1, it.name) } + recents.take(4).map { Triple(it, 2, it.name) }
-    }
-    var showAll by rememberSaveable { mutableStateOf(false) }
-    var adding by remember { mutableStateOf(false) }
-    if (adding) AddPlaceDialog(engine, null) { adding = false }
-    val here = engine.fix?.pos
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ParkedCard(engine)
         engine.resume?.let { rp ->
@@ -2441,61 +2403,6 @@ private fun ImmQuick(engine: NavEngine, showSaved: Boolean = true) {
                 if (suggestion.sub.isNotBlank()) Text(suggestion.sub, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(L.t("Go"), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-        // three places on show to keep the map clear; "All" opens the rest (it used to be a list up to five tall)
-        AnimatedVisibility(showSaved && engine.prefs.b(PreferenceKeys.QUICKLIST, false),
-            enter = fadeIn(tween(200)) + androidx.compose.animation.expandVertically(tween(240)), exit = fadeOut(tween(140)) + androidx.compose.animation.shrinkVertically(tween(200))) {
-        Column(Modifier.fillMaxWidth().panel(10.dp, RoundedCornerShape(26.dp), c.surface).padding(vertical = 6.dp)) {
-            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(L.t("SAVED & RECENT"), color = c.sub, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = Modifier.weight(1f))
-                if (saved.size > 3) Text(if (showAll) L.t("Less") else L.t("All {0}", saved.size), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { showAll = !showAll }.padding(horizontal = 10.dp, vertical = 8.dp))
-                Row(Modifier.clip(RoundedCornerShape(12.dp)).clickable { adding = true }.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Add, null, tint = c.accent, modifier = Modifier.size(18.dp))
-                    Text(L.t("Add"), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 2.dp))
-                }
-            }
-            if (saved.isEmpty()) Text(L.t("Places you save or drive to show up here"), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 8.dp))
-            LazyColumn(Modifier.heightIn(max = 250.dp)) {
-                items(if (showAll) saved else saved.take(3)) { (p, kind, label) ->
-                    val fav = kind != 2
-                    val sr = if (kind == 3) routes.firstOrNull { it.dest === p && it.name == label } else null
-                    // swipe a place sideways to take it off the list (a favourite is unstarred, a recent one forgotten, your own place removed)
-                    var dx by remember { mutableStateOf(0f) }
-                    var w by remember { mutableStateOf(1) }
-                    val shown by androidx.compose.animation.core.animateFloatAsState(dx, label = "swipe")
-                    Row(Modifier.fillMaxWidth().onSizeChanged { w = it.width }
-                        .pointerInput(p, kind) {
-                            detectHorizontalDragGestures(
-                                onDragEnd = {
-                                    if (kotlin.math.abs(dx) > w * 0.35f) when (kind) {
-                                        0 -> { engine.places.removeCustom(label); engine.toast(L.t("Removed {0}", label), 2000) }
-                                        3 -> { sr?.let { engine.deleteSavedRoute(it) }; engine.toast(L.t("Removed from saved routes"), 2000) }
-                                        1 -> { engine.places.toggleFavourite(p); engine.toast(L.t("Removed from favourites"), 2000) }
-                                        else -> { engine.places.removeRecent(p); engine.toast(L.t("Removed from recent places"), 2000) }
-                                    }
-                                    dx = 0f
-                                },
-                                onDragCancel = { dx = 0f },
-                            ) { change, amount -> change.consume(); dx += amount }
-                        }
-                        .graphicsLayer { translationX = shown; alpha = 1f - (kotlin.math.abs(shown) / w.toFloat()).coerceIn(0f, 0.7f) }
-                        .clickable { if (sr != null) engine.startSavedRoute(sr) else engine.startRoute(p) }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(44.dp).clip(CircleShape).background(c.tile), contentAlignment = Alignment.Center) {
-                            if (kind == 3) Icon(Icons.Rounded.Route, null, tint = c.accent, modifier = Modifier.size(22.dp))
-                            else Icon(if (fav) Icons.Rounded.Star else Icons.Rounded.History, null, tint = if (fav) Warn else c.sub, modifier = Modifier.size(22.dp))
-                        }
-                        Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                            Text(label, color = c.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (sr != null) Text(when (sr.stops.size) { 0 -> L.t("Saved route"); 1 -> L.t("Saved route · 1 stop"); else -> L.t("Saved route · {0} stops", sr.stops.size) },
-                                color = c.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            else if (p.sub.isNotBlank()) Text(p.sub, color = c.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        if (here != null) Text(Geo.fmtDist(Geo.dist(here, p.pos), engine.imperial), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
-        }
         }
     }
 }
