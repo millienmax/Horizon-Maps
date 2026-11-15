@@ -1147,7 +1147,7 @@ private fun ImmSearch(engine: NavEngine, q: String, onQ: (String) -> Unit, locke
                 if (q.isNotEmpty()) Icon(Icons.Rounded.Close, L.t("Clear"), tint = c.sub, modifier = Modifier.padding(end = 8.dp).clickable { onQ(""); engine.results = emptyList() })
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     // folds Saved & recent up under the bar, and back down again
-                    val open = engine.prefs.b(PreferenceKeys.QUICKLIST, true)
+                    val open = engine.prefs.b(PreferenceKeys.QUICKLIST, false)
                     Box(Modifier.padding(end = 4.dp).size(40.dp).clip(CircleShape).clickable { engine.prefs.put(PreferenceKeys.QUICKLIST, !open) }, contentAlignment = Alignment.Center) {
                         Icon(if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, if (open) L.t("Hide saved and recent") else L.t("Show saved and recent"), tint = c.sub, modifier = Modifier.size(24.dp))
                     }
@@ -1212,28 +1212,107 @@ internal fun ImmChip(icon: ImageVector, tint: Color, label: String, onClick: () 
     }
 }
 
-/** Under the search bar: Home and Work as two tiles with the drive time, then five round buttons to find things nearby. */
+/** Under the search bar: sleek Material 3 Expressive horizontal chip carousel. */
 @Composable
 private fun ImmChips(engine: NavEngine, focusSearch: () -> Unit) {
+    val c = LocalVw.current
     val home = engine.places.slot("home")
     val work = engine.places.slot("work")
-    // the drive times: the engine throttles this itself (online only, every 10 minutes or after moving 3 km), so a minute's tick is cheap
     LaunchedEffect(Unit) { while (true) { engine.refreshSlotTimes(); delay(60_000) } }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PlaceTile(engine, Modifier.weight(1f), Icons.Rounded.Home, Color(0xFF4C8DFF), L.t("Home"), home, engine.slotMins["home"]) {
-                if (home != null) engine.startRoute(home) else { engine.pendingSave = "home"; engine.toast(L.t("Search for your home address"), 3500); focusSearch() }
+
+    val homeSub = when {
+        home == null -> null
+        engine.slotMins["home"] != null && engine.slotMins["home"]!! > 0 -> Geo.fmtDur(engine.slotMins["home"]!! * 60.0)
+        else -> null
+    }
+    val workSub = when {
+        work == null -> null
+        engine.slotMins["work"] != null && engine.slotMins["work"]!! > 0 -> Geo.fmtDur(engine.slotMins["work"]!! * 60.0)
+        else -> null
+    }
+
+    val picks = chosenShortcuts(engine)
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ExpressiveNavChip(
+            icon = Icons.Rounded.Home,
+            tint = Color(0xFF4C8DFF),
+            label = L.t("Home") + (if (homeSub != null) " · $homeSub" else ""),
+            onClick = {
+                if (home != null) engine.startRoute(home)
+                else { engine.pendingSave = "home"; engine.toast(L.t("Search for your home address"), 3500); focusSearch() }
             }
-            PlaceTile(engine, Modifier.weight(1f), Icons.Rounded.Work, Color(0xFFF29900), L.t("Work"), work, engine.slotMins["work"]) {
-                if (work != null) engine.startRoute(work) else { engine.pendingSave = "work"; engine.toast(L.t("Search for your work address"), 3500); focusSearch() }
+        )
+        ExpressiveNavChip(
+            icon = Icons.Rounded.Work,
+            tint = Color(0xFFF29900),
+            label = L.t("Work") + (if (workSub != null) " · $workSub" else ""),
+            onClick = {
+                if (work != null) engine.startRoute(work)
+                else { engine.pendingSave = "work"; engine.toast(L.t("Search for your work address"), 3500); focusSearch() }
             }
+        )
+        for (s in picks) {
+            ExpressiveNavChip(
+                icon = s.icon,
+                tint = s.color,
+                label = L.t(s.desc),
+                onClick = { engine.loadNearby(s.kind, false) }
+            )
         }
-        // things to find nearby: the ones picked in Settings › Places & trips (up to five, all on show, no scrolling sideways);
-        // as before when none are picked (Charging and Toilets in place of Fuel for an electric car, lorry parks for a lorry)
-        val picks = chosenShortcuts(engine)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = if (picks.size >= 4) Arrangement.SpaceBetween else Arrangement.spacedBy(14.dp)) {
-            for (s in picks) FindButton(s.icon, s.color, L.t(s.desc)) { engine.loadNearby(s.kind, false) }
+    }
+}
+
+@Composable
+private fun ExpressiveNavChip(
+    icon: ImageVector,
+    tint: Color,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val c = LocalVw.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier
+            .shadow(
+                elevation = 2.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.12f),
+                spotColor = Color.Black.copy(alpha = 0.16f)
+            )
+            .clip(shape)
+            .background(c.surface)
+            .pressClick(onClick)
+            .padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Box(
+            Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(tint.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(15.dp))
         }
+        Text(
+            text = label,
+            color = c.text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 
@@ -1392,7 +1471,7 @@ private fun ImmQuick(engine: NavEngine, showSaved: Boolean = true) {
             Text(L.t("Go"), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         // three places on show to keep the map clear; "All" opens the rest (it used to be a list up to five tall)
-        AnimatedVisibility(showSaved && engine.prefs.b(PreferenceKeys.QUICKLIST, true),
+        AnimatedVisibility(showSaved && engine.prefs.b(PreferenceKeys.QUICKLIST, false),
             enter = fadeIn(tween(200)) + androidx.compose.animation.expandVertically(tween(240)), exit = fadeOut(tween(140)) + androidx.compose.animation.shrinkVertically(tween(200))) {
         Column(Modifier.fillMaxWidth().panel(10.dp, RoundedCornerShape(26.dp), c.surface).padding(vertical = 6.dp)) {
             Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
