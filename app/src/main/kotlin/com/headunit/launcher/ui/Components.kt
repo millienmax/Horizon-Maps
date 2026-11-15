@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.composed
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -29,6 +31,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.layout.onSizeChanged
@@ -63,8 +67,9 @@ import com.headunit.launcher.MapBinding
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Click with a fluid spring press scale and native Material 3 ripple. */
-fun Modifier.pressClick(onClick: () -> Unit): Modifier = this.composed {
+/** Click with a fluid spring press scale and native Material 3 ripple (supporting optional long-press). */
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.pressClick(onLongClick: (() -> Unit)? = null, onClick: () -> Unit): Modifier = this.composed {
     val src = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val s by androidx.compose.animation.core.animateFloatAsState(
@@ -76,15 +81,23 @@ fun Modifier.pressClick(onClick: () -> Unit): Modifier = this.composed {
         label = "press"
     )
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    this.graphicsLayer { scaleX = s; scaleY = s }.clickable(
+    this.graphicsLayer { scaleX = s; scaleY = s }.combinedClickable(
         interactionSource = src,
         indication = androidx.compose.material3.ripple(),
         onClick = {
             try { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
             onClick()
+        },
+        onLongClick = onLongClick?.let { action ->
+            {
+                try { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                action()
+            }
         }
     )
 }
+
+fun Modifier.pressClick(onClick: () -> Unit): Modifier = pressClick(null, onClick)
 
 /** Expressive Material 3 elevated card with soft tonal shadow and generous 26dp rounded corners. */
 @Composable
@@ -438,15 +451,30 @@ fun rememberPulse(active: Boolean, ms: Int, from: Float = 0f, to: Float = 1f): a
     )
 }
 
-/** Themed on/off switch: accent track when on, quiet outline when off. */
+/** Themed on/off switch: accent track with checkmark thumb when on, MD3 outlined track when off. */
 @Composable
 fun Switch(checked: Boolean, onChange: (Boolean) -> Unit) {
     val c = LocalVw.current
     androidx.compose.material3.Switch(
-        checked = checked, onCheckedChange = onChange,
+        checked = checked,
+        onCheckedChange = onChange,
+        thumbContent = if (checked) {
+            {
+                androidx.compose.material3.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Rounded.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        } else null,
         colors = androidx.compose.material3.SwitchDefaults.colors(
-            checkedThumbColor = Color.White, checkedTrackColor = c.accent, checkedBorderColor = c.accent,
-            uncheckedThumbColor = c.sub, uncheckedTrackColor = c.tile, uncheckedBorderColor = c.line,
+            checkedThumbColor = if (c.accent.luminance() > 0.6f) Color(0xFF10131C) else Color.White,
+            checkedTrackColor = c.accent,
+            checkedBorderColor = c.accent,
+            checkedIconColor = c.accent,
+            uncheckedThumbColor = c.sub,
+            uncheckedTrackColor = c.tile.copy(alpha = 0.4f),
+            uncheckedBorderColor = c.sub.copy(alpha = 0.6f),
         ),
     )
 }

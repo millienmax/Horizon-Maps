@@ -151,8 +151,8 @@ internal fun SToggle(prefs: Prefs, title: String, key: String, def: Boolean, sub
                 checkedTrackColor = c.accent,
                 checkedIconColor = c.accent,
                 uncheckedThumbColor = c.sub,
-                uncheckedTrackColor = c.tile,
-                uncheckedBorderColor = Color.Transparent
+                uncheckedTrackColor = c.tile.copy(alpha = 0.4f),
+                uncheckedBorderColor = c.sub.copy(alpha = 0.6f)
             )
         )
     }

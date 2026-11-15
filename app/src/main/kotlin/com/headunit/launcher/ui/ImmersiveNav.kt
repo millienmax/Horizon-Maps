@@ -3,6 +3,7 @@ package com.headunit.launcher.ui
 import com.headunit.launcher.L
 import com.headunit.launcher.Place
 import com.headunit.launcher.LL
+import kotlin.math.roundToInt
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -103,10 +104,12 @@ import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material.icons.rounded.LocalPolice
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MyLocation
+import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PriorityHigh
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Route
@@ -176,26 +179,39 @@ fun ImmersiveNav(engine: NavEngine, onSettings: () -> Unit) {
 private val LocalInRail = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 @Composable
-private fun ImmCircle(onClick: () -> Unit, size: Dp = 52.dp, active: Boolean = false, content: @Composable BoxScope.() -> Unit) {
+private fun ImmCircle(
+    onClick: () -> Unit,
+    size: Dp = 52.dp,
+    active: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit
+) {
     val c = LocalVw.current
     val shape = RoundedCornerShape(18.dp)
     Box(
-        if (LocalInRail.current) Modifier.size(size).pressClick(onClick).padding(4.dp).clip(RoundedCornerShape(14.dp)).background(if (active) c.accent else Color.Transparent)
-        else Modifier.size(size).panel(5.dp, shape, if (active) c.accent else c.surface).pressClick(onClick),
+        if (LocalInRail.current) Modifier.size(size).pressClick(onLongClick, onClick).padding(4.dp).clip(RoundedCornerShape(14.dp)).background(if (active) c.accent else Color.Transparent)
+        else Modifier.size(size).panel(5.dp, shape, if (active) c.accent else c.surface).pressClick(onLongClick, onClick),
         contentAlignment = Alignment.Center, content = content,
     )
 }
 
 @Composable
-private fun ImmIcon(icon: ImageVector, onClick: () -> Unit, active: Boolean = false, size: Dp = 52.dp, desc: String? = null) {
+private fun ImmIcon(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    active: Boolean = false,
+    size: Dp = 52.dp,
+    onLongClick: (() -> Unit)? = null,
+    desc: String? = null
+) {
     val c = LocalVw.current
-    ImmCircle(onClick, size, active) { Icon(icon, desc, tint = if (active) Color.White else c.text, modifier = Modifier.size(size * 0.46f)) }
+    ImmCircle(onClick = onClick, size = size, active = active, onLongClick = onLongClick) { Icon(icon, desc, tint = if (active) Color.White else c.text, modifier = Modifier.size(size * 0.46f)) }
 }
 
 @Composable
 internal fun ImmPill(text: String, onClick: () -> Unit, icon: ImageVector? = null, filled: Boolean = false) {
     val c = LocalVw.current
-    val fg = if (filled) Color.White else c.text
+    val fg = if (filled) (if (c.accent.luminance() > 0.5f) Color(0xFF003258) else Color.White) else c.text
     Row(
         Modifier.height(48.dp).panel(6.dp, RoundedCornerShape(24.dp), if (filled) c.accent else c.surface)
             .pressClick(onClick).padding(horizontal = 20.dp),
@@ -230,6 +246,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
     val shareEta = rememberShareEta(engine)
     var q by rememberSaveable { mutableStateOf("") }
     var sheet by remember { mutableStateOf(false) }
+    var soundSheet by remember { mutableStateOf(false) }
     // voice: "take me to…", "share my ETA", "avoid this road", "mute"… anything else is searched for
     val voice = rememberVoiceInput(L.t("Say a destination or a command")) { said ->
         when (val r = engine.handleVoice(said)) {
@@ -259,8 +276,8 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
     }
     // text shared from another app goes into the search box
     LaunchedEffect(engine.externalQuery) { engine.externalQuery?.let { q = it; engine.externalQuery = null; searchFocused = true } }
-    BackHandler(enabled = sheet) { sheet = false }
-    BackHandler(enabled = searchActive && !sheet) { dismissSearch() }
+    BackHandler(enabled = sheet || soundSheet) { sheet = false; soundSheet = false }
+    BackHandler(enabled = searchActive && !sheet && !soundSheet) { dismissSearch() }
     val simple by remember { derivedStateOf { engine.driving && engine.prefs.b(PreferenceKeys.DRIVESIMPLE, true) } }
 
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -432,12 +449,21 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             // are on the trip card while navigating, Settings is beside these when you're not (and in map options' header when you are)
             val railItems = ArrayList<@Composable () -> Unit>()
             railItems.add(@Composable { ImmCompass(engine) })
-            railItems.add(@Composable { ImmIcon(Icons.Rounded.Layers, { sheet = !sheet }, active = sheet, desc = L.t("Map options")) })
-            // navigating: sound in one big button with the others (voice, alerts only, mute), as in Google Maps. It used to be a small
-            // button on the trip card, close to the others and hard to hit while driving (GitHub, magnazan)
-            if (routing) railItems.add(@Composable {
-                ImmCircle({ engine.cycleSound() }, 52.dp) {
-                    Icon(soundIcon(engine.soundMode), L.t("Sound"), tint = if (engine.soundMode == 2) Bad else c.text, modifier = Modifier.size(24.dp))
+            railItems.add(@Composable { ImmIcon(Icons.Rounded.Layers, { sheet = !sheet; if (sheet) soundSheet = false }, active = sheet, desc = L.t("Map options")) })
+            // Quick sound control (always visible): tap cycles All/Alerts/Mute, long-press opens sound sheet
+            railItems.add(@Composable {
+                val soundTint = when (engine.soundMode) {
+                    0 -> c.text
+                    1 -> Color(0xFFF29900)
+                    else -> Bad
+                }
+                ImmCircle(
+                    onClick = { engine.cycleSound() },
+                    onLongClick = { soundSheet = !soundSheet; if (soundSheet) sheet = false },
+                    size = 52.dp,
+                    active = soundSheet
+                ) {
+                    Icon(soundIcon(engine.soundMode), L.t("Sound"), tint = if (soundSheet) Color.White else soundTint, modifier = Modifier.size(24.dp))
                 }
             })
             // navigating: other ways to go, any time (as in Google Maps): shown in grey on the map with how they compare, tap one to switch
@@ -476,19 +502,24 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             CompositionLocalProvider(LocalDensity provides Density(buttonBaseDensity.density * mainButtonScale, buttonBaseDensity.fontScale)) {
                 val rail: @Composable (List<@Composable () -> Unit>) -> Unit = { part ->
                     Column(Modifier.panel(6.dp, RoundedCornerShape(26.dp), c.surface), horizontalAlignment = Alignment.CenterHorizontally) {
-                        CompositionLocalProvider(LocalInRail provides true) { for (item in part) item() }
+                        CompositionLocalProvider(LocalInRail provides true) {
+                            part.forEachIndexed { idx, item ->
+                                if (idx > 0) Box(Modifier.width(26.dp).height(1.dp).background(c.line.copy(alpha = 0.5f)))
+                                item()
+                            }
+                        }
                     }
                 }
                 val zoom: @Composable () -> Unit = {
                     AnimatedVisibility(showZoom, enter = fadeIn(tween(200)) + androidx.compose.animation.expandVertically(tween(220)), exit = fadeOut(tween(250)) + androidx.compose.animation.shrinkVertically(tween(260))) {
                         Column(Modifier.panel(6.dp, RoundedCornerShape(26.dp), c.surface), horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(52.dp).pressClick { engine.zoom(1.0) }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, L.t("Zoom in"), tint = c.text, modifier = Modifier.size(26.dp)) }
-                            Box(Modifier.width(26.dp).height(1.dp).background(c.line))
+                            Box(Modifier.width(26.dp).height(1.dp).background(c.line.copy(alpha = 0.5f)))
                             Box(Modifier.size(52.dp).pressClick { engine.zoom(-1.0) }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Remove, L.t("Zoom out"), tint = c.text, modifier = Modifier.size(26.dp)) }
                         }
                     }
                 }
-                val settings: @Composable () -> Unit = { if (showSettings) ImmIcon(Icons.Rounded.Settings, { sheet = false; onSettings() }, desc = L.t("Settings")) }
+                val settings: @Composable () -> Unit = { if (showSettings) ImmIcon(Icons.Rounded.Settings, { sheet = false; soundSheet = false; onSettings() }, desc = L.t("Settings")) }
                 // the panel against the screen edge with zoom under it (or beside it), in as many columns as it needs
                 val panelAndZoom: @Composable () -> Unit = {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
@@ -678,6 +709,32 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                 onSettings = { sheet = false; onSettings() },
                 voice = voice
             ) { sheet = false }
+        }
+
+        // ---- the sound sheet slides in from the bottom on phones, and from the side on wide screens; tapping the scrim closes it
+        if (soundSheet && !previewing) Box(
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { soundSheet = false },
+        )
+        AnimatedVisibility(
+            visible = soundSheet && !previewing,
+            modifier = if (narrow) Modifier.align(Alignment.BottomCenter) else Modifier.align(side(Alignment.CenterEnd)),
+            enter = if (narrow) {
+                slideInVertically(initialOffsetY = { it }, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) + fadeIn()
+            } else {
+                slideInHorizontally(initialOffsetX = { if (mir) -it else it }) + fadeIn()
+            },
+            exit = if (narrow) {
+                slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            } else {
+                slideOutHorizontally(targetOffsetX = { if (mir) -it else it }) + fadeOut()
+            },
+        ) {
+            SoundQuickSheet(
+                engine = engine,
+                narrow = narrow,
+                onSettings = { soundSheet = false; onSettings() }
+            ) { soundSheet = false }
         }
         if (engine.stopsEditor) StopsDialog(engine, onClose = { engine.stopsEditor = false })
     }
@@ -950,6 +1007,127 @@ private fun Segments(labels: List<String>, selected: Int, onPick: (Int) -> Unit)
         }
     }
 }
+
+/**
+ * Quick sound & guidance options bottom sheet: guidance mode (All, Alerts only, Off), chime volume,
+ * voice channel, and quick prompt toggles.
+ */
+@Composable
+private fun SoundQuickSheet(
+    engine: NavEngine,
+    narrow: Boolean = false,
+    onSettings: () -> Unit = {},
+    close: () -> Unit
+) { TextSides {
+    val c = LocalVw.current
+    val p = engine.prefs
+    val shape = if (narrow) RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) else RoundedCornerShape(28.dp)
+    Column(
+        Modifier
+            .then(
+                if (narrow) Modifier.fillMaxWidth().heightIn(max = 520.dp)
+                else Modifier.widthIn(max = 410.dp).fillMaxWidth().padding(10.dp)
+            )
+            .shadow(if (narrow) 24.dp else 16.dp, shape)
+            .clip(shape)
+            .background(c.panel)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
+    ) {
+        if (narrow) {
+            Box(
+                Modifier
+                    .padding(top = 10.dp, bottom = 4.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .width(38.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(c.sub.copy(alpha = 0.35f))
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = if (narrow) 6.dp else 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(L.t("Sound & guidance"), color = c.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            ImmIcon(Icons.Rounded.Settings, onSettings, size = 42.dp, desc = L.t("Settings"))
+            Spacer(Modifier.width(8.dp))
+            ImmIcon(Icons.Rounded.Close, close, size = 42.dp, desc = L.t("Close"))
+        }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            SheetHeading(L.t("Spoken guidance"))
+            val soundMode = engine.soundMode
+            ExpressiveConnectedButtonGroup(
+                items = listOf(
+                    ButtonGroupItem(Icons.Rounded.VolumeUp, L.t("All")),
+                    ButtonGroupItem(Icons.Rounded.NotificationsActive, L.t("Alerts")),
+                    ButtonGroupItem(Icons.Rounded.VolumeOff, L.t("Muted")),
+                ),
+                selectedIndex = soundMode,
+                onSelect = { mode ->
+                    p.put(PreferenceKeys.SOUND_MODE, mode)
+                    if (mode != 2) engine.testChime()
+                }
+            )
+
+            SheetHeading(L.t("Alert chime volume"))
+            val curVol = p.i(PreferenceKeys.CHIME_VOL, 70).coerceIn(5, 100).toFloat()
+            var sliderVol by remember(curVol) { mutableStateOf(curVol) }
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.tile).padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.NotificationsActive, null, tint = c.sub, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                androidx.compose.material3.Slider(
+                    value = sliderVol,
+                    onValueChange = { sliderVol = it },
+                    onValueChangeFinished = {
+                        p.put(PreferenceKeys.CHIME_VOL, sliderVol.roundToInt())
+                        engine.testChime()
+                    },
+                    valueRange = 5f..100f,
+                    modifier = Modifier.weight(1f),
+                    colors = androidx.compose.material3.SliderDefaults.colors(
+                        thumbColor = c.accent,
+                        activeTrackColor = c.accent,
+                        inactiveTrackColor = c.line
+                    )
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("${sliderVol.roundToInt()}%", color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(42.dp))
+            }
+
+            SheetHeading(L.t("Voice channel"))
+            val chan = p.s(PreferenceKeys.VOICE_CHANNEL, "nav")
+            val chanIndex = if (chan == "media") 1 else 0
+            ExpressiveConnectedButtonGroup(
+                items = listOf(
+                    ButtonGroupItem(Icons.Rounded.Navigation, L.t("Navigation")),
+                    ButtonGroupItem(Icons.Rounded.PlayArrow, L.t("Media")),
+                ),
+                selectedIndex = chanIndex,
+                onSelect = { i -> p.put(PreferenceKeys.VOICE_CHANNEL, if (i == 1) "media" else "nav") }
+            )
+
+            SheetHeading(L.t("Prompts"))
+            fun tog(key: String, def: Boolean): Pair<Boolean, () -> Unit> { val on = p.b(key, def); return on to { p.put(key, !on) } }
+            val (sayRoads, flipRoads) = tog(PreferenceKeys.VOICE_ROADS, true)
+            val (landmarks, flipLandmarks) = tog(PreferenceKeys.LANDMARK_DIRS, true)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExpressivePillToggle(Icons.Rounded.RecordVoiceOver, L.t("Road names"), sayRoads, flipRoads, Modifier.weight(1f))
+                ExpressivePillToggle(Icons.Rounded.Navigation, L.t("Landmarks"), landmarks, flipLandmarks, Modifier.weight(1f))
+            }
+        }
+    }
+} }
 
 private fun soundIcon(mode: Int): ImageVector = when (mode) { 0 -> Icons.Rounded.VolumeUp; 1 -> Icons.Rounded.NotificationsActive; else -> Icons.Rounded.VolumeOff }
 
@@ -2017,37 +2195,37 @@ private fun ExpressiveNavChip(
     modifier: Modifier = Modifier
 ) {
     val c = LocalVw.current
-    val shape = RoundedCornerShape(50)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier
             .shadow(
                 elevation = 2.dp,
                 shape = shape,
                 clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.12f),
+                ambientColor = Color.Black.copy(alpha = 0.10f),
                 spotColor = Color.Black.copy(alpha = 0.16f)
             )
             .clip(shape)
             .background(c.surface)
             .pressClick(onClick)
-            .padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 7.dp, end = 15.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
             Modifier
-                .size(26.dp)
-                .clip(CircleShape)
+                .size(28.dp)
+                .clip(RoundedCornerShape(9.dp))
                 .background(tint.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, null, tint = tint, modifier = Modifier.size(15.dp))
+            Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
         }
         Text(
             text = label,
             color = c.text,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
+            fontSize = 14.5.sp,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             softWrap = false
         )

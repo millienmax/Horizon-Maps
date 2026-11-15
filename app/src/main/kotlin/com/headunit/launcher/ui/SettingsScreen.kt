@@ -24,7 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.rounded.Close
@@ -1348,12 +1347,17 @@ private fun ScreenSection(prefs: Prefs, engine: NavEngine) {
         val autoScale = prefs.b(PreferenceKeys.UI_AUTO_SCALE, prefs.s(PreferenceKeys.UI_SCALE, "").isBlank())
         SItem(
             L.t("Automatically scale UI"),
-            if (autoScale) L.t("Optimized for screen size ({0}%)", autoPercent) else L.t("Manual scaling enabled")
+            if (autoScale) L.t("Optimized for screen size ({0}%)", autoPercent) else L.t("Manual scaling enabled"),
+            onClick = {
+                val next = !autoScale
+                if (!next) prefs.put(PreferenceKeys.UI_SCALE, autoPercent)
+                prefs.put(PreferenceKeys.UI_AUTO_SCALE, next)
+            }
         ) {
-            Switch(checked = autoScale, onCheckedChange = { enabled ->
+            Switch(autoScale) { enabled ->
                 if (!enabled) prefs.put(PreferenceKeys.UI_SCALE, autoPercent)
                 prefs.put(PreferenceKeys.UI_AUTO_SCALE, enabled)
-            })
+            }
         }
         SSlider(
             L.t("Text and button size"),
