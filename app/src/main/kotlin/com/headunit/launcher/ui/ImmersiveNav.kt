@@ -864,10 +864,11 @@ private fun OptionsSheet(
                     Triple(Icons.Rounded.CameraAlt, L.t("Cameras"), tog(PreferenceKeys.HAZARD_ICONS, true)),
                     Triple(Icons.Rounded.Traffic, L.t("Traffic lights"), tog(PreferenceKeys.SIGNALS, true)),
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    for ((icon, label, st) in details) {
-                        ToggleTile(Modifier.weight(1f), icon, label, st.first, st.second)
+                for (row in details.chunked(2)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((icon, label, st) in row) {
+                        ExpressivePillToggle(icon, label, st.first, st.second, Modifier.weight(1f))
                     }
+                    repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
 
                 SheetHeading(L.t("3D & environment"))
@@ -879,9 +880,11 @@ private fun OptionsSheet(
                     Triple(Icons.Rounded.DirectionsWalk, L.t("Footpaths"), tog(PreferenceKeys.PATHS, true)),
                     Triple(Icons.Rounded.WaterDrop, L.t("Rain radar"), tog(PreferenceKeys.RAIN_RADAR, false)),
                 )
-                for (row in envLayers.chunked(3)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    for ((icon, label, st) in row) ToggleTile(Modifier.weight(1f), icon, label, st.first, st.second)
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                for (row in envLayers.chunked(2)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((icon, label, st) in row) {
+                        ExpressivePillToggle(icon, label, st.first, st.second, Modifier.weight(1f))
+                    }
+                    repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -1008,6 +1011,72 @@ private fun LookCard(modifier: Modifier, label: String, satellite: Boolean, sele
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp)
         )
+    }
+}
+
+/** MD3 Expressive regular pill toggle button with leading icon, text, and active checkmark. */
+@Composable
+private fun ExpressivePillToggle(
+    icon: ImageVector,
+    label: String,
+    on: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = LocalVw.current
+    val shape = RoundedCornerShape(21.dp)
+
+    val bgColor by animateColorAsState(
+        targetValue = if (on) c.accent else c.tile,
+        animationSpec = tween(200)
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (on) Color.White else c.text,
+        animationSpec = tween(200)
+    )
+
+    Box(
+        modifier = modifier
+            .height(42.dp)
+            .clip(shape)
+            .background(bgColor)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = androidx.compose.material3.ripple(),
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        ) {
+            if (on) {
+                Icon(
+                    Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                label,
+                color = contentColor,
+                fontSize = 12.sp,
+                fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
