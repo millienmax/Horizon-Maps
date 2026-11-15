@@ -34,6 +34,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.AddLocationAlt
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -149,7 +152,7 @@ internal fun BoxScope.RoutePreview(engine: NavEngine) {
     if (arriveBy) ArriveByDialog(engine) { arriveBy = false }
     val fmt = com.headunit.launcher.Clock.format()
     val baseMs = if (engine.departAtMs > 0) engine.departAtMs else System.currentTimeMillis()
-    Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 4.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
     val selRoute = rs.getOrNull(engine.active)
     // fuel estimate from the economy and pump price set in Settings > Driving (blank = not shown)
     val ev = engine.prefs.s(PreferenceKeys.FUEL_TYPE, "E10") == "EV"
@@ -158,152 +161,355 @@ internal fun BoxScope.RoutePreview(engine: NavEngine) {
     val costText = if (mpg != null && ppl != null && selRoute != null)
         (if (ev) L.t("Charging about ") else L.t("Fuel about ")) + java.text.NumberFormat.getCurrencyInstance(if (engine.imperial) java.util.Locale.UK else java.util.Locale.getDefault()).format(
             if (ev) selRoute.len / 1609.344 / mpg * ppl / 100.0 else selRoute.len / 1609.344 / mpg * 4.54609 * ppl / 100.0) else null
-    ZonesRow(engine)
-    if (engine.routeWx.isNotEmpty()) {
-        val fahr = isImperial(engine.prefs)
+
+    val narrowP = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 720
+    val cardShape = RoundedCornerShape(24.dp)
+
+    Column(
+        Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .widthIn(max = if (narrowP) 540.dp else 900.dp)
+            .fillMaxWidth()
+            .shadow(
+                elevation = 6.dp,
+                shape = cardShape,
+                ambientColor = Color.Black.copy(alpha = 0.12f),
+                spotColor = Color.Black.copy(alpha = 0.18f)
+            )
+            .clip(cardShape)
+            .background(c.surface)
+            .border(1.dp, c.line.copy(alpha = 0.65f), cardShape)
+            .padding(start = 18.dp, end = 14.dp, top = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Destination Header Row
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(L.t("Destination").uppercase(), color = c.sub, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                Text(
+                    engine.dest?.name ?: "",
+                    color = c.text,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val d = engine.dest
+                if (d != null) {
+                    Row(
+                        Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val fav = engine.places.isFavourite(d)
+                        ActionIconBtn(
+                            icon = if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            desc = L.t("Favourite"),
+                            tint = if (fav) Warn else c.text,
+                            bg = if (fav) Warn.copy(alpha = 0.18f) else c.tile,
+                            onClick = { engine.toast(if (engine.places.toggleFavourite(d)) L.t("Saved to favourites") else L.t("Removed from favourites"), 2000) }
+                        )
+                        ActionIconBtn(
+                            icon = Icons.Rounded.Home,
+                            desc = L.t("Set as home"),
+                            tint = c.text,
+                            onClick = { engine.places.setSlot("home", d); engine.toast(L.t("Home set to {0}", d.name), 2500) }
+                        )
+                        ActionIconBtn(
+                            icon = Icons.Rounded.Work,
+                            desc = L.t("Set as work"),
+                            tint = c.text,
+                            onClick = { engine.places.setSlot("work", d); engine.toast(L.t("Work set to {0}", d.name), 2500) }
+                        )
+                        val rawRoutes = engine.prefs.s(PreferenceKeys.PLACES_ROUTES, "[]")
+                        val routeSaved = remember(rawRoutes, engine.active, engine.routes, engine.via) { engine.routeIsSaved() }
+                        ActionIconBtn(
+                            icon = Icons.Rounded.AddRoad,
+                            desc = L.t("Save route"),
+                            tint = if (routeSaved) c.accent else c.text,
+                            bg = if (routeSaved) c.accent.copy(alpha = 0.18f) else c.tile,
+                            onClick = { engine.toggleSaveRoute() }
+                        )
+                        if (engine.prefs.s(PreferenceKeys.LINK_ROLE, "") == "phone" && engine.prefs.s(PreferenceKeys.LINK_CODE, "").isNotBlank()) {
+                            ActionIconBtn(
+                                icon = Icons.Rounded.DirectionsCar,
+                                desc = L.t("Send to car"),
+                                tint = c.accent,
+                                onClick = { engine.sendToCar(d) }
+                            )
+                        }
+                    }
+                }
+            }
+            Box(
+                Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .pressClick { engine.endRoute() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Close, L.t("Close"), tint = c.sub, modifier = Modifier.size(20.dp))
+            }
+        }
+
+        // Leave & Stops Controls Row (horizontally scrollable if needed)
         Row(
-            Modifier.floating(50.dp).horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp),
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(L.t("Weather on route"), color = c.sub, fontSize = 13.sp)
-            engine.routeWx.forEach { w ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(wxIcon(w.code), null, tint = wxTint(w.code), modifier = Modifier.size(24.dp))
-                    Column(Modifier.padding(start = 6.dp)) {
-                        Text((if (fahr) Math.round(w.temp * 9 / 5 + 32) else Math.round(w.temp)).toString() + "°", color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text("in ${if (w.minutes >= 60) "${w.minutes / 60} h ${w.minutes % 60} min" else "${w.minutes} min"}" + (if (w.rain >= 40) " · ${w.rain}%" else ""), color = if (w.rain >= 60) Warn else c.sub, fontSize = 11.sp)
+            // Connected Button Group for "Leave":
+            val leaveOpts = listOf(
+                L.t("Now") to 0,
+                L.t("+15m") to 15,
+                L.t("+30m") to 30,
+                L.t("+1h") to 60,
+                L.t("Arrive by…") to -1
+            )
+            Row(
+                Modifier
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(c.tile)
+                    .border(1.dp, c.line.copy(alpha = 0.65f), RoundedCornerShape(12.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                leaveOpts.forEachIndexed { idx, (label, m) ->
+                    if (idx > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.line.copy(alpha = 0.45f)))
+                    val isSel = if (m == -1) hold else engine.departMin == m && !hold
+                    val itemBg = if (isSel) c.accent else Color.Transparent
+                    val itemFg = if (isSel) Color.White else c.text
+                    Box(
+                        Modifier
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(if (isSel) 10.dp else 0.dp))
+                            .background(itemBg)
+                            .pressClick {
+                                if (m == -1) arriveBy = true
+                                else if (engine.departMin != m) engine.setDeparture(m)
+                            }
+                            .padding(horizontal = 11.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(label, color = itemFg, fontSize = 12.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium)
+                    }
+                }
+            }
+
+            // Assist Chips for "Stops":
+            AssistChip(
+                icon = Icons.Rounded.LocalGasStation,
+                label = L.t("+ Fuel"),
+                active = engine.stopMode && engine.nearbyKind == "fuel",
+                onClick = { engine.stopMode = true; engine.loadNearby("fuel", false) }
+            )
+            AssistChip(
+                icon = Icons.Rounded.EvStation,
+                label = L.t("+ Charger"),
+                active = engine.stopMode && engine.nearbyKind == "charging",
+                onClick = { engine.stopMode = true; engine.loadNearby("charging", false) }
+            )
+            AssistChip(
+                icon = Icons.Rounded.AddLocationAlt,
+                label = if (engine.via.isEmpty()) L.t("+ Stop") else L.t("Edit stops"),
+                active = false,
+                onClick = { engine.stopsEditor = true }
+            )
+            if (engine.via.isNotEmpty()) {
+                Text(
+                    engine.via.joinToString(" › ") { it.name },
+                    color = c.text,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 200.dp)
+                )
+            }
+            if (costText != null) Text(costText, color = c.sub, fontSize = 12.sp)
+            engine.destRain?.let { Text(it, color = Warn, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+        }
+
+        // Weather on route (if present)
+        if (engine.routeWx.isNotEmpty()) {
+            val fahr = isImperial(engine.prefs)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(L.t("Weather"), color = c.sub, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                engine.routeWx.forEach { w ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(wxIcon(w.code), null, tint = wxTint(w.code), modifier = Modifier.size(20.dp))
+                        Column(Modifier.padding(start = 4.dp)) {
+                            Text((if (fahr) Math.round(w.temp * 9 / 5 + 32) else Math.round(w.temp)).toString() + "°", color = c.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("in ${if (w.minutes >= 60) "${w.minutes / 60}h ${w.minutes % 60}m" else "${w.minutes}m"}" + (if (w.rain >= 40) " · ${w.rain}%" else ""), color = if (w.rain >= 60) Warn else c.sub, fontSize = 11.sp)
+                        }
                     }
                 }
             }
         }
-    }
-    Row(
-        Modifier.floating(50.dp).horizontalScroll(rememberScrollState()).padding(6.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(L.t("Stops"), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 10.dp))
-        Pill(L.t("+ Fuel"), engine.stopMode && engine.nearbyKind == "fuel", { engine.stopMode = true; engine.loadNearby("fuel", false) })
-        Pill(L.t("+ Charger"), engine.stopMode && engine.nearbyKind == "charging", { engine.stopMode = true; engine.loadNearby("charging", false) })
-        if (engine.prefs.s(PreferenceKeys.VEHICLE, "car") == "lorry") Pill(L.t("+ Lorry park"), engine.stopMode && engine.nearbyKind == "lorrypark", { engine.stopMode = true; engine.loadNearby("lorrypark", false) })
-        Pill(if (engine.via.isEmpty()) L.t("+ Stop") else L.t("Edit stops"), false, { engine.stopsEditor = true })
-        if (engine.via.isNotEmpty()) Text(engine.via.joinToString(" › ") { it.name }, color = c.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
-        if (costText != null) Text(costText, color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp))
-        engine.destRain?.let { Text(it, color = Warn, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 8.dp)) }
-    }
-    Row(
-        Modifier.floating(50.dp).horizontalScroll(rememberScrollState()).padding(6.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(L.t("Leave"), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 10.dp))
-        for ((label, m) in listOf(L.t("Now") to 0, L.t("+15 min") to 15, L.t("+30 min") to 30, "+1 h" to 60, "+2 h" to 120)) {
-            Pill(label, engine.departMin == m, { if (engine.departMin != m) engine.setDeparture(m) })
-        }
-        Pill(L.t("Arrive by…"), hold, { arriveBy = true })
-    }
-    // electric: the battery now, the least you want to arrive with, and the eco route; a charging stop is then suggested
-    // below if the trip needs one
-    if (ev) Row(
-        Modifier.floating(50.dp).horizontalScroll(rememberScrollState()).padding(6.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        val pct = engine.prefs.i(PreferenceKeys.EV_CHARGE_PCT, 80).coerceIn(5, 100)
-        val minArr = engine.prefs.i(PreferenceKeys.EV_MIN_ARRIVE, 20)
-        Text(L.t("Battery now"), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 10.dp))
-        Pill("−", false, { engine.prefs.put(PreferenceKeys.EV_CHARGE_PCT, (pct - 10).coerceAtLeast(5)); engine.refreshEvPlan() })
-        Text("$pct%", color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp))
-        Pill("+", false, { engine.prefs.put(PreferenceKeys.EV_CHARGE_PCT, (pct + 10).coerceAtMost(100)); engine.refreshEvPlan() })
-        Text(L.t("Arrive with at least"), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(start = 14.dp, end = 4.dp))
-        for (m in listOf(10, 20, 30)) Pill("$m%", minArr == m, { engine.prefs.put(PreferenceKeys.EV_MIN_ARRIVE, m); engine.refreshEvPlan() })
-        val eco = engine.prefs.b(PreferenceKeys.ROUTE_ECO, false)
-        Pill(if (eco) L.t("Eco route ✓") else L.t("Eco route"), eco, { engine.prefs.put(PreferenceKeys.ROUTE_ECO, !eco); engine.rerouteForSettings() })
-    }
-    FuelSuggestionRow(engine)
-    // landscape: everything in one row. Portrait (narrow): destination on top, the route choices across, Start underneath.
-    val narrowP = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 720
-    val destPart: @Composable (Modifier) -> Unit = { m ->
-        Column(m) {
-            Text(L.t("Destination"), color = c.sub, fontSize = 12.sp)
-            Text(engine.dest?.name ?: "", color = c.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val d = engine.dest
-            if (d != null) Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                val fav = engine.places.isFavourite(d)
-                Icon(if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder, L.t("Favourite"), tint = if (fav) Warn else c.sub,
-                    modifier = Modifier.size(26.dp).clickable { engine.toast(if (engine.places.toggleFavourite(d)) L.t("Saved to favourites") else L.t("Removed from favourites"), 2000) })
-                Icon(Icons.Rounded.Home, L.t("Set as home"), tint = c.sub,
-                    modifier = Modifier.size(26.dp).clickable { engine.places.setSlot("home", d); engine.toast(L.t("Home set to {0}", d.name), 2500) })
-                Icon(Icons.Rounded.Work, L.t("Set as work"), tint = c.sub,
-                    modifier = Modifier.size(26.dp).clickable { engine.places.setSlot("work", d); engine.toast(L.t("Work set to {0}", d.name), 2500) })
-                // Save route: the destination, the stops and the road picked, to plan again later (the star already saves the place)
-                val rawRoutes = engine.prefs.s(PreferenceKeys.PLACES_ROUTES, "[]")
-                val routeSaved = remember(rawRoutes, engine.active, engine.routes, engine.via) { engine.routeIsSaved() }
-                Icon(Icons.Rounded.AddRoad, L.t("Save route"), tint = if (routeSaved) c.accent else c.sub, modifier = Modifier.size(26.dp).clickable { engine.toggleSaveRoute() })
-                // paired with your car (Settings > Places & trips): send it there instead of driving it from here
-                if (engine.prefs.s(PreferenceKeys.LINK_ROLE, "") == "phone" && engine.prefs.s(PreferenceKeys.LINK_CODE, "").isNotBlank())
-                    Icon(Icons.Rounded.DirectionsCar, L.t("Send to car"), tint = c.accent, modifier = Modifier.size(26.dp).clickable { engine.sendToCar(d) })
-            }
-        }
-    }
-    val routeCards: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
-        rs.forEachIndexed { i, r ->
-            val sel = i == engine.active
-            val shape = RoundedCornerShape(18.dp)
-            val label = if (i == fastest) L.t("Fastest") else if (rs[i].simpler) L.t("Simplest") else if (i == shortest) L.t("Shortest") else L.t("Alternative")
-            Column(
-                Modifier.weight(1f).inset(18.dp, if (sel) c.accent else null)
-                                        .clickable { engine.selectRoute(i) }.padding(horizontal = 14.dp, vertical = 9.dp),
-            ) {
-                Text(label.uppercase(), color = if (sel) c.accent else c.sub, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Text(Geo.fmtDur(r.time), color = c.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text(L.t("{0} · arrive {1}", Geo.fmtDist(r.len, engine.imperial), fmt.format(java.util.Date(baseMs + (r.time * 1000).toLong()))), color = c.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val via = viaOf(r)
-                val delayMin = Math.round(r.delay / 60.0).toInt()
-                Text(
-                    if (delayMin >= 1) L.t("+{0} min traffic", delayMin) else if (via.isNotEmpty()) "via $via" else L.t("No delays"),
-                    color = if (delayMin >= 10) Bad else if (delayMin >= 1) Warn else c.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                LorryBadge(r)
-                if (i == engine.active) LorryCheck(engine, r)
-            }
-        }
-    }
-    val startBtn: @Composable (Modifier) -> Unit = { m ->
-        Box(
-            m.height(64.dp).clip(RoundedCornerShape(32.dp)).background(c.accent.copy(alpha = 0.30f))
-                .clickable { engine.beginNavigation() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(progress.value).background(c.accent))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(24.dp).padding(end = 6.dp))
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(L.t(if (engine.demoNext) "Start demo drive" else "Start navigation"), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text(if (hold) L.t("Planned for later") else if (autoStart) L.t("Starting in {0} s", kotlin.math.ceil((1f - progress.value) * (countdownMs / 1000f)).toInt()) else L.t("Tap to start"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+
+        // Zones & Fuel Suggestions (if present)
+        ZonesRow(engine)
+        FuelSuggestionRow(engine)
+
+        // Route Choices Row
+        val routeCards: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
+            rs.forEachIndexed { i, r ->
+                val sel = i == engine.active
+                val shape = RoundedCornerShape(16.dp)
+                val label = if (i == fastest) L.t("Fastest") else if (rs[i].simpler) L.t("Simplest") else if (i == shortest) L.t("Shortest") else L.t("Alternative")
+                val cardBg = if (sel) c.accent.copy(alpha = 0.14f) else c.tile
+                val cardBorder = if (sel) 2.dp to c.accent else 1.dp to c.line.copy(alpha = 0.5f)
+
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clip(shape)
+                        .background(cardBg)
+                        .border(cardBorder.first, cardBorder.second, shape)
+                        .pressClick { engine.selectRoute(i) }
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        label.uppercase(),
+                        color = if (sel) c.accent else c.sub,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    )
+                    Text(
+                        Geo.fmtDur(r.time),
+                        color = if (sel) c.accent else c.text,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        L.t("{0} · arrive {1}", Geo.fmtDist(r.len, engine.imperial), fmt.format(java.util.Date(baseMs + (r.time * 1000).toLong()))),
+                        color = c.sub,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val via = viaOf(r)
+                    val delayMin = Math.round(r.delay / 60.0).toInt()
+                    Text(
+                        if (delayMin >= 1) L.t("+{0} min traffic", delayMin) else if (via.isNotEmpty()) "via $via" else L.t("No delays"),
+                        color = if (delayMin >= 10) Bad else if (delayMin >= 1) Warn else c.sub,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    LorryBadge(r)
+                    if (i == engine.active) LorryCheck(engine, r)
                 }
             }
         }
+
+        val startBtn: @Composable (Modifier) -> Unit = { m ->
+            val btnShape = RoundedCornerShape(16.dp)
+            Box(
+                m
+                    .height(56.dp)
+                    .clip(btnShape)
+                    .background(c.accent.copy(alpha = 0.30f))
+                    .pressClick { engine.beginNavigation() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(progress.value).background(c.accent))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(20.dp).padding(end = 6.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            L.t(if (engine.demoNext) "Start demo drive" else "Start navigation"),
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (hold) L.t("Planned for later") else if (autoStart) L.t("Starting in {0} s", kotlin.math.ceil((1f - progress.value) * (countdownMs / 1000f)).toInt()) else L.t("Tap to start"),
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        if (!narrowP) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) { routeCards() }
+                if (engine.prefs.b(PreferenceKeys.FLYOVER, true)) FlyOverBtn(engine)
+                if (engine.prefs.b(PreferenceKeys.DEMO, false)) DemoChoiceBtn(engine)
+                startBtn(Modifier.width(230.dp))
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { routeCards() }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (engine.prefs.b(PreferenceKeys.FLYOVER, true)) FlyOverBtn(engine)
+                if (engine.prefs.b(PreferenceKeys.DEMO, false)) DemoChoiceBtn(engine)
+                startBtn(Modifier.weight(1f))
+            }
+        }
     }
-    if (!narrowP) Row(
-        Modifier.fillMaxWidth().floating(28.dp).padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+}
+
+@Composable
+private fun ActionIconBtn(
+    icon: ImageVector,
+    desc: String,
+    tint: Color,
+    bg: Color = LocalVw.current.tile,
+    onClick: () -> Unit
+) {
+    val c = LocalVw.current
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, c.line.copy(alpha = 0.5f), shape)
+            .pressClick(onClick),
+        contentAlignment = Alignment.Center
     ) {
-        destPart(Modifier.width(150.dp))
-        routeCards()
-        if (engine.prefs.b(PreferenceKeys.FLYOVER, true)) FlyOverBtn(engine)
-        if (engine.prefs.b(PreferenceKeys.DEMO, false)) DemoChoiceBtn(engine)
-        startBtn(Modifier.width(210.dp))
-        RoundBtn(Icons.Rounded.Close, { engine.endRoute() }, size = 46.dp)
-    } else Column(Modifier.fillMaxWidth().floating(28.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            destPart(Modifier.weight(1f))
-            RoundBtn(Icons.Rounded.Close, { engine.endRoute() }, size = 46.dp)
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { routeCards() }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (engine.prefs.b(PreferenceKeys.FLYOVER, true)) FlyOverBtn(engine)
-            if (engine.prefs.b(PreferenceKeys.DEMO, false)) DemoChoiceBtn(engine)
-            startBtn(Modifier.weight(1f))
-        }
+        Icon(icon, desc, tint = tint, modifier = Modifier.size(18.dp))
     }
+}
+
+@Composable
+private fun AssistChip(
+    icon: ImageVector,
+    label: String,
+    active: Boolean = false,
+    onClick: () -> Unit
+) {
+    val c = LocalVw.current
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        Modifier
+            .height(36.dp)
+            .clip(shape)
+            .background(if (active) c.accent.copy(alpha = 0.18f) else c.tile)
+            .border(1.dp, if (active) c.accent else c.line.copy(alpha = 0.5f), shape)
+            .pressClick(onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Icon(icon, null, tint = if (active) c.accent else c.sub, modifier = Modifier.size(16.dp))
+        Text(label, color = if (active) c.accent else c.text, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -346,13 +552,25 @@ internal fun LorryCheck(engine: NavEngine, r: com.headunit.launcher.Route) {
 @Composable
 private fun FlyOverBtn(engine: NavEngine) {
     val c = LocalVw.current
+    val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.height(72.dp).clip(RoundedCornerShape(36.dp)).background(c.accent.copy(alpha = 0.14f))
-            .clickable(enabled = !engine.flyingOver) { engine.flyOver() }.padding(horizontal = 16.dp),
+        Modifier
+            .height(56.dp)
+            .clip(shape)
+            .background(c.accent.copy(alpha = 0.14f))
+            .border(1.dp, c.accent.copy(alpha = 0.35f), shape)
+            .pressClick { if (!engine.flyingOver) engine.flyOver() }
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.PlayArrow, null, tint = c.accent, modifier = Modifier.size(24.dp))
-        Text(if (engine.flyingOver) L.t("Flying…") else L.t("Fly over route"), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+        Icon(Icons.Rounded.PlayArrow, null, tint = c.accent, modifier = Modifier.size(22.dp))
+        Text(
+            if (engine.flyingOver) L.t("Flying…") else L.t("Fly over"),
+            color = c.accent,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 6.dp)
+        )
     }
 }
 
@@ -679,13 +897,24 @@ internal object JunctionPics {
 internal fun DemoChoiceBtn(engine: NavEngine) {
     val c = LocalVw.current
     val on = engine.demoNext
-    // (styled like Fly over route beside it; filled once chosen)
+    val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.height(72.dp).clip(RoundedCornerShape(36.dp)).background(if (on) c.accent else c.accent.copy(alpha = 0.14f))
-            .clickable { engine.toggleDemoNext() }.padding(horizontal = 16.dp),
+        Modifier
+            .height(56.dp)
+            .clip(shape)
+            .background(if (on) c.accent else c.accent.copy(alpha = 0.14f))
+            .border(1.dp, if (on) c.accent else c.accent.copy(alpha = 0.35f), shape)
+            .pressClick { engine.toggleDemoNext() }
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.DirectionsCar, null, tint = if (on) Color.White else c.accent, modifier = Modifier.size(24.dp))
-        Text(L.t("Demo"), color = if (on) Color.White else c.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+        Icon(Icons.Rounded.DirectionsCar, null, tint = if (on) Color.White else c.accent, modifier = Modifier.size(22.dp))
+        Text(
+            L.t("Demo"),
+            color = if (on) Color.White else c.accent,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 6.dp)
+        )
     }
 }
