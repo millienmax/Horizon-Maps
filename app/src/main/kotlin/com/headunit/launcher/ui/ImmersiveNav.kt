@@ -739,37 +739,43 @@ private fun OptionsSheet(
         ) {
         val mapPart: @Composable () -> Unit = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // quick rows: the view and the sound (they were round buttons on the map)
-                SheetHeading(L.t("View"))
-                Segments(listOf("2D", "3D"), if (engine.tilt3d) 1 else 0) { i -> if ((i == 1) != engine.tilt3d) engine.toggleTilt() }
-                SheetHeading(L.t("Sound"))
-                Segments(listOf(L.t("Voice"), L.t("Alerts only"), L.t("Mute")), engine.soundMode) { i -> p.put(PreferenceKeys.SOUND_MODE, i) }
-                SheetHeading(L.t("Map"))
-                // the map's look: two picture cards, then day and night
+                SheetHeading(L.t("Map type"))
                 val sat = p.b(PreferenceKeys.SATELLITE, false)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LookCard(Modifier.weight(1f), L.t("Standard"), false, !sat) { p.put(PreferenceKeys.SATELLITE, false) }
                     LookCard(Modifier.weight(1f), L.t("Satellite"), true, sat) { p.put(PreferenceKeys.SATELLITE, true) }
                 }
-                // Auto covers every automatic choice in Settings (headlights, sun times, your own times): tapping it while one of those
-                // is on leaves it as it is
+
+                SheetHeading(L.t("Appearance & view"))
                 val theme = p.s(PreferenceKeys.THEME, "auto")
                 val seg = when (theme) { "day" -> 1; "night" -> 2; else -> 0 }
                 Segments(listOf(L.t("Auto"), L.t("Day"), L.t("Night")), seg) { i -> if (i != seg) p.put(PreferenceKeys.THEME, listOf("auto", "day", "night")[i]) }
-                SheetHeading(L.t("On the map"))
+                Segments(listOf("2D", "3D"), if (engine.tilt3d) 1 else 0) { i -> if ((i == 1) != engine.tilt3d) engine.toggleTilt() }
+
                 fun tog(key: String, def: Boolean): Pair<Boolean, () -> Unit> { val on = p.b(key, def); return on to { p.put(key, !on) } }
-                val layers = listOf(
+
+                SheetHeading(L.t("Map details"))
+                val details = listOf(
                     Triple(Icons.Rounded.Traffic, L.t("Traffic"), tog(PreferenceKeys.TRAFFIC, true)),
-                    Triple(Icons.Rounded.Apartment, L.t("3D buildings"), tog(PreferenceKeys.BUILDINGS_3D, true)),
-                    Triple(Icons.Rounded.Traffic, L.t("Traffic lights"), tog(PreferenceKeys.SIGNALS, true)),
                     Triple(Icons.Rounded.CameraAlt, L.t("Cameras"), tog(PreferenceKeys.HAZARD_ICONS, true)),
-                    Triple(Icons.Rounded.Lightbulb, L.t("Street lamps"), tog(PreferenceKeys.LAMPS, true)),
+                    Triple(Icons.Rounded.Traffic, L.t("Traffic lights"), tog(PreferenceKeys.SIGNALS, true)),
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for ((icon, label, st) in details) {
+                        ToggleTile(Modifier.weight(1f), icon, label, st.first, st.second)
+                    }
+                }
+
+                SheetHeading(L.t("3D & environment"))
+                val envLayers = listOf(
+                    Triple(Icons.Rounded.Apartment, L.t("3D buildings"), tog(PreferenceKeys.BUILDINGS_3D, true)),
                     Triple(Icons.Rounded.Park, L.t("Trees"), tog(PreferenceKeys.TREES, true)),
+                    Triple(Icons.Rounded.AcUnit, L.t("Weather"), tog(PreferenceKeys.RAIN_EFFECTS, false)),
+                    Triple(Icons.Rounded.Lightbulb, L.t("Street lamps"), tog(PreferenceKeys.LAMPS, true)),
                     Triple(Icons.Rounded.DirectionsWalk, L.t("Footpaths"), tog(PreferenceKeys.PATHS, true)),
                     Triple(Icons.Rounded.WaterDrop, L.t("Rain radar"), tog(PreferenceKeys.RAIN_RADAR, false)),
-                    Triple(Icons.Rounded.AcUnit, L.t("Weather"), tog(PreferenceKeys.RAIN_EFFECTS, false)),
                 )
-                for (row in layers.chunked(3)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                for (row in envLayers.chunked(3)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     for ((icon, label, st) in row) ToggleTile(Modifier.weight(1f), icon, label, st.first, st.second)
                     repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
@@ -787,38 +793,13 @@ private fun OptionsSheet(
                 ))
             }
         }
-        val restPart: @Composable () -> Unit = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SheetHeading(L.t("Report here"))
-                WideTiles(5, listOf(
-                    TileSpec(Icons.Rounded.LocalPolice, L.t("Police"), Color(0xFF1E66F5), { engine.report("police"); close() }),
-                    TileSpec(Icons.Rounded.CarCrash, L.t("Crash"), Bad, { engine.report("accident"); close() }),
-                    TileSpec(Icons.Rounded.PriorityHigh, L.t("Hazard"), Warn, { engine.report("hazard"); close() }),
-                    TileSpec(Icons.Rounded.Build, L.t("Broken down"), Color(0xFFFB8C00), { engine.report("breakdown"); close() }),
-                    TileSpec(Icons.Rounded.CameraAlt, L.t("Mobile cam"), Color(0xFF1E66F5), { engine.report("mobilecam"); close() }),
-                ), compact = true)
-                // with no route the map page already has fuel, charging, food, coffee and parking, so only the rest are here
-                fun find(kind: String): () -> Unit = { engine.loadNearby(kind, false); close() }
-                val finds = listOfNotNull(
-                    if (engine.route != null && !engine.hideFuel) TileSpec(Icons.Rounded.LocalGasStation, L.t("Fuel"), Color(0xFFEA4335), find("fuel")) else null,
-                    if (engine.route != null) TileSpec(Icons.Rounded.EvStation, L.t("Charging"), Color(0xFF34A853), find("charging")) else null,
-                    if (engine.route != null) TileSpec(Icons.Rounded.Restaurant, L.t("Food"), Color(0xFFF29900), find("food")) else null,
-                    if (engine.route != null) TileSpec(Icons.Rounded.LocalCafe, L.t("Coffee"), Color(0xFFA56BFF), find("coffee")) else null,
-                    TileSpec(Icons.Rounded.Wc, L.t("Toilets"), Color(0xFF4C8DFF), find("toilets")),
-                    if (engine.route != null) TileSpec(Icons.Rounded.LocalParking, L.t("Parking"), Color(0xFF4C8DFF), find("parking")) else null,
-                    if (engine.route != null) TileSpec(Icons.Rounded.Apartment, L.t("Services"), Color(0xFF12A4B4), find("services")) else null,
-                    if (engine.dest != null) TileSpec(Icons.Rounded.Place, L.t("Park at end"), Color(0xFFEA4335), { engine.loadNearby("parking", true); close() }) else null,
-                )
-                SheetHeading(if (engine.route != null) L.t("Find along the route") else L.t("Find nearby"))
-                WideTiles(4, finds)
-            }
-        }
         if (wide) Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             Box(Modifier.weight(1f)) { mapPart() }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { tripPart(); restPart() }
+            if (routing) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { tripPart() }
         } else {
             // while navigating the trip tools come first; otherwise the map
-            tripPart(); mapPart(); restPart()
+            if (routing) tripPart()
+            mapPart()
         }
         }
     }
@@ -936,22 +917,37 @@ private fun ToggleTile(modifier: Modifier, icon: ImageVector, label: String, on:
             .clip(shape)
             .background(if (on) c.accent.copy(alpha = 0.16f) else c.tile)
             .pressClick(onClick)
-            .padding(vertical = 12.dp, horizontal = 6.dp),
+            .padding(vertical = 12.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(if (on) c.accent else Color.Transparent),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                icon,
-                if (on) "$label on" else "$label off",
-                tint = if (on) Color.White else c.sub,
-                modifier = Modifier.size(22.dp)
-            )
+        Box(contentAlignment = Alignment.TopEnd) {
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(if (on) c.accent else Color.Transparent),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    if (on) "$label on" else "$label off",
+                    tint = if (on) Color.White else c.sub,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            if (on) {
+                Box(
+                    Modifier
+                        .offset(x = 4.dp, y = (-3).dp)
+                        .size(15.dp)
+                        .clip(CircleShape)
+                        .background(c.accent)
+                        .border(1.5.dp, c.panel, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(9.dp))
+                }
+            }
         }
         Text(
             label,
