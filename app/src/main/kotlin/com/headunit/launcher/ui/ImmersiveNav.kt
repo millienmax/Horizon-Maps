@@ -1832,21 +1832,27 @@ private fun ImmSearch(
     voice: () -> Unit
 ) { TextSides {
     val c = LocalVw.current
-    val shape = RoundedCornerShape(28.dp)
+    // MD3 Expressive Outlined Squircle Search Bar (16dp rounded corners with crisp border)
+    val shape = RoundedCornerShape(16.dp)
     val focusManager = LocalFocusManager.current
 
     Box(
         Modifier
             .fillMaxWidth()
-            .height(58.dp)
+            .height(56.dp)
             .shadow(
-                elevation = if (searchActive) 8.dp else 4.dp,
+                elevation = if (searchActive) 4.dp else 2.dp,
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.14f),
-                spotColor = Color.Black.copy(alpha = 0.20f)
+                ambientColor = Color.Black.copy(alpha = 0.08f),
+                spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .clip(shape)
             .background(c.surface)
+            .border(
+                width = if (searchActive) 2.dp else 1.dp,
+                color = if (searchActive) c.accent else c.line.copy(alpha = 0.7f),
+                shape = shape
+            )
     ) {
         TextField(
             value = q,

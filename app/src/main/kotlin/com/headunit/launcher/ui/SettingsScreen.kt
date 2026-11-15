@@ -208,18 +208,24 @@ private fun SettingsBody(prefs: Prefs, engine: NavEngine, onClose: () -> Unit) {
                 )
             }
 
-            // Search bar: MD3 Expressive pill
+            // Search bar: MD3 Expressive Outlined Squircle
+            val searchShape = RoundedCornerShape(16.dp)
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(CircleShape)
-                    .background(c.tile)
+                    .height(52.dp)
+                    .clip(searchShape)
+                    .background(c.panel)
+                    .border(
+                        width = if (query.isNotEmpty()) 2.dp else 1.dp,
+                        color = if (query.isNotEmpty()) c.accent else c.line.copy(alpha = 0.65f),
+                        shape = searchShape
+                    )
                     .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.Search, null, tint = c.sub, modifier = Modifier.size(20.dp))
-                Box(Modifier.weight(1f).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
+                Icon(Icons.Rounded.Search, null, tint = if (query.isNotEmpty()) c.accent else c.sub, modifier = Modifier.size(22.dp))
+                Box(Modifier.weight(1f).padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) Text(L.t("Search settings"), color = c.sub, fontSize = 15.sp)
                     androidx.compose.foundation.text.BasicTextField(
                         value = query,

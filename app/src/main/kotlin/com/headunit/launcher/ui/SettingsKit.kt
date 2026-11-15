@@ -265,23 +265,25 @@ internal fun SButton(text: String, primary: Boolean = false, danger: Boolean = f
     }
 }
 
-/** A text box for a key, number or address. */
+/** A text box for a key, number or address: MD3 Outlined squircle field. */
 @Composable
 internal fun SField(value: String, onChange: (String) -> Unit, placeholder: String = "", password: Boolean = false, number: Boolean = false, width: Dp = 360.dp, fill: Boolean = false) {
     val c = LocalVw.current
+    val shape = RoundedCornerShape(16.dp)
     TextField(
         value = value, onValueChange = onChange, singleLine = true,
         placeholder = { Text(placeholder, color = c.sub) },
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = if (number) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = c.tile, unfocusedContainerColor = c.tile,
+            focusedContainerColor = c.panel, unfocusedContainerColor = c.panel,
             focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
             focusedTextColor = c.text, unfocusedTextColor = c.text, cursorColor = c.accent,
         ),
         // [fill]: as wide as there is room for, up to [width] (so it fits a portrait screen too)
-        modifier = if (fill) Modifier.widthIn(max = width).fillMaxWidth() else Modifier.width(width),
+        modifier = (if (fill) Modifier.widthIn(max = width).fillMaxWidth() else Modifier.width(width))
+            .border(1.dp, c.line.copy(alpha = 0.65f), shape),
     )
 }
 
