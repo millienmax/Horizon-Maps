@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -54,11 +56,32 @@ import kotlin.math.roundToInt
 @Composable
 internal fun SGroup(title: String? = null, footer: String? = null, content: @Composable ColumnScope.() -> Unit) {
     val c = LocalVw.current
+    val shape = RoundedCornerShape(24.dp)
     Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
-        if (title != null) Text(title.uppercase(), color = c.sub, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = Modifier.padding(start = 6.dp, bottom = 6.dp))
-        // the same card look as the map screen: soft surface with a hairline edge
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.panel).border(1.dp, c.line, RoundedCornerShape(22.dp)).padding(horizontal = 18.dp, vertical = 6.dp).animateContentSize(), content = content)
-        if (footer != null) Text(footer, color = c.sub, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp))
+        if (title != null) Text(
+            title.uppercase(),
+            color = c.sub,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp,
+            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+        )
+        // MD3 Expressive continuous rounded card: soft tonal surface with no hairline border
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(c.panel)
+                .padding(horizontal = 18.dp, vertical = 6.dp)
+                .animateContentSize(),
+            content = content
+        )
+        if (footer != null) Text(
+            footer,
+            color = c.sub,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp)
+        )
     }
 }
 
@@ -89,7 +112,7 @@ internal fun SItem(title: String, sub: String? = null, onClick: (() -> Unit)? = 
         Modifier.fillMaxWidth().heightIn(min = 56.dp).then(hlMod).then(if (onClick != null) Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick) else Modifier).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f).padding(end = 14.dp)) {
+        Column(Modifier.weight(1f, fill = false).padding(end = 12.dp)) {
             Text(title, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             if (!sub.isNullOrBlank()) Text(sub, color = c.sub, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
@@ -104,20 +127,67 @@ internal fun SToggle(prefs: Prefs, title: String, key: String, def: Boolean, sub
     SItem(title, sub, onClick = { prefs.put(key, !on) }) { Switch(on, { prefs.put(key, it) }) }
 }
 
-/** A row of choices in a rounded track, with the chosen one filled. */
+/** A row of choices with MD3 expressive connected button group styling and corner morphing. */
 @Composable
 internal fun Segmented(options: List<Pair<String, String>>, value: String, onPick: (String) -> Unit) {
     val c = LocalVw.current
-    Row(Modifier.clip(RoundedCornerShape(50)).background(c.tile).horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(3.dp)) {
-        for ((k, label) in options) {
+    val count = options.size
+    Row(
+        Modifier
+            .heightIn(min = 40.dp)
+            .horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        options.forEachIndexed { i, (k, label) ->
             val sel = k == value
-            val bg by androidx.compose.animation.animateColorAsState(if (sel) c.accent else c.accent.copy(alpha = 0f), androidx.compose.animation.core.tween(180), label = "seg")
-            val fg by androidx.compose.animation.animateColorAsState(if (sel) (if (c.accent.luminance() > 0.6f) Color(0xFF10131C) else Color.White) else c.text, androidx.compose.animation.core.tween(180), label = "segT")
+            val startCorner by androidx.compose.animation.core.animateDpAsState(
+                targetValue = if (sel || i == 0) 21.dp else 6.dp,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                )
+            )
+            val endCorner by androidx.compose.animation.core.animateDpAsState(
+                targetValue = if (sel || i == count - 1) 21.dp else 6.dp,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                )
+            )
+            val shape = RoundedCornerShape(
+                topStart = startCorner,
+                bottomStart = startCorner,
+                topEnd = endCorner,
+                bottomEnd = endCorner
+            )
+            val bg by androidx.compose.animation.animateColorAsState(
+                targetValue = if (sel) c.accent else c.tile,
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+            val fg by androidx.compose.animation.animateColorAsState(
+                targetValue = if (sel) (if (c.accent.luminance() > 0.6f) Color(0xFF10131C) else Color.White) else c.text,
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
             Box(
-                Modifier.clip(RoundedCornerShape(50)).background(bg).clickable { onPick(k) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                Modifier
+                    .clip(shape)
+                    .background(bg)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = androidx.compose.material3.ripple(),
+                        onClick = { onPick(k) }
+                    )
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, color = fg, fontSize = 14.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1)
+                Text(
+                    label,
+                    color = fg,
+                    fontSize = 13.5.sp,
+                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -127,9 +197,9 @@ internal fun Segmented(options: List<Pair<String, String>>, value: String, onPic
 @Composable
 internal fun SChoice(title: String, options: List<Pair<String, String>>, value: String, sub: String? = null, onPick: (String) -> Unit) {
     val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 720
-    val long = options.size > 3 || options.sumOf { it.second.length } > (if (narrow) 12 else 26)
+    val long = options.size > 2 || options.sumOf { it.second.length } > (if (narrow) 10 else 20) || !sub.isNullOrBlank()
     if (!long) SItem(title, sub) { Segmented(options, value, onPick) }
-    else Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+    else Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         SItem(title, sub)
         Segmented(options, value, onPick)
     }
@@ -242,13 +312,46 @@ internal fun SPictureChoice(
             for ((id, label) in options) {
                 val sel = id == value
                 Column(
-                    Modifier.clip(RoundedCornerShape(14.dp)).background(if (sel) c.accent.copy(alpha = 0.14f) else c.tile)
-                        .border(2.dp, if (sel) c.accent else Color.Transparent, RoundedCornerShape(14.dp))
-                        .pressClick { onPick(id) }.padding(8.dp),
+                    Modifier
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (sel) c.accent.copy(alpha = 0.16f) else c.tile)
+                        .border(if (sel) 2.dp else 0.dp, if (sel) c.accent else Color.Transparent, RoundedCornerShape(18.dp))
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = androidx.compose.material3.ripple(),
+                            onClick = { onPick(id) }
+                        )
+                        .padding(10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    androidx.compose.foundation.Canvas(Modifier.size(width = 96.dp, height = 64.dp).clip(RoundedCornerShape(8.dp))) { draw(id, c) }
-                    Text(label, color = if (sel) c.accent else c.text, fontSize = 12.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.padding(top = 6.dp))
+                    Box {
+                        androidx.compose.foundation.Canvas(Modifier.size(width = 96.dp, height = 64.dp).clip(RoundedCornerShape(12.dp))) { draw(id, c) }
+                        if (sel) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(c.accent),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.material3.Icon(
+                                    Icons.Rounded.Check,
+                                    null,
+                                    tint = if (c.accent.luminance() > 0.6f) Color(0xFF10131C) else Color.White,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        label,
+                        color = if (sel) c.accent else c.text,
+                        fontSize = 12.5.sp,
+                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
                 }
             }
         }

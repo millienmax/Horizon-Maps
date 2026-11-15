@@ -46,6 +46,10 @@ import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -142,28 +146,82 @@ private fun SettingsBody(prefs: Prefs, engine: NavEngine, onClose: () -> Unit) {
             words.all { hay.contains(it) }
         }.sortedBy { val t = it.title.lowercase() + " " + L.t(it.title).lowercase(); if (t.startsWith(words[0]) || L.t(it.title).lowercase().startsWith(words[0])) 0 else if (t.contains(words[0])) 1 else 2 }.take(40)
     }
-    Row(Modifier.fillMaxSize().background(c.bg).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        // the list of sections
-        if (!narrowS || showList) Column(
-            Modifier.then(if (narrowS) Modifier.fillMaxWidth() else Modifier.width(290.dp)).fillMaxHeight().clip(RoundedCornerShape(28.dp)).background(c.panel).border(1.dp, c.line, RoundedCornerShape(28.dp)).verticalScroll(rememberScrollState()).padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(46.dp).clip(CircleShape).background(c.tile).pressClick(onClose), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.ArrowBack, L.t("Back to the map"), tint = c.text, modifier = Modifier.size(24.dp))
-                }
-                Text(L.t("Settings"), color = c.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 14.dp))
+    // Categories grouping: MAP, DRIVING, YOU, DEVICE
+    val categories = remember {
+        val list = mutableListOf<Pair<String, List<Pair<Int, Section>>>>()
+        var currentHeading = "MAP"
+        var currentItems = mutableListOf<Pair<Int, Section>>()
+        sections.forEachIndexed { i, s ->
+            if (s.heading != null && currentItems.isNotEmpty()) {
+                list.add(currentHeading to currentItems.toList())
+                currentItems = mutableListOf()
+                currentHeading = s.heading
+            } else if (s.heading != null) {
+                currentHeading = s.heading
             }
-            // search every setting by name
+            currentItems.add(i to s)
+        }
+        if (currentItems.isNotEmpty()) {
+            list.add(currentHeading to currentItems.toList())
+        }
+        list
+    }
+
+    val listContent = @Composable { isDualPane: Boolean ->
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(if (isDualPane) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header
             Row(
-                Modifier.fillMaxWidth().padding(bottom = 8.dp).height(46.dp).clip(RoundedCornerShape(50)).background(c.tile).padding(horizontal = 14.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(c.tile)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = androidx.compose.material3.ripple(),
+                            onClick = onClose
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, L.t("Back to the map"), tint = c.text, modifier = Modifier.size(22.dp))
+                }
+                Text(
+                    L.t("Settings"),
+                    color = c.text,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 14.dp)
+                )
+            }
+
+            // Search bar: MD3 Expressive pill
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(CircleShape)
+                    .background(c.tile)
+                    .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Rounded.Search, null, tint = c.sub, modifier = Modifier.size(20.dp))
                 Box(Modifier.weight(1f).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) Text(L.t("Search settings"), color = c.sub, fontSize = 15.sp)
                     androidx.compose.foundation.text.BasicTextField(
-                        value = query, onValueChange = { query = it; highlight = null }, singleLine = true,
+                        value = query,
+                        onValueChange = { query = it; highlight = null },
+                        singleLine = true,
                         textStyle = androidx.compose.ui.text.TextStyle(color = c.text, fontSize = 15.sp),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
@@ -171,92 +229,317 @@ private fun SettingsBody(prefs: Prefs, engine: NavEngine, onClose: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                if (query.isNotEmpty()) Icon(Icons.Rounded.Close, L.t("Clear"), tint = c.sub, modifier = Modifier.size(20.dp).clickable { query = ""; focus.clearFocus() })
+                if (query.isNotEmpty()) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        L.t("Clear"),
+                        tint = c.sub,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable { query = ""; focus.clearFocus() }
+                    )
+                }
             }
+
             if (words.isNotEmpty()) {
-                if (matches.isEmpty()) Text(L.t("Nothing matches \"{0}\"", query.trim()), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(10.dp))
-                matches.forEach { r ->
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {
-                            cat = r.section; highlight = r.title; query = ""; focus.clearFocus(); showList = false
-                        }.padding(horizontal = 12.dp, vertical = 9.dp),
-                    ) {
-                        Text(L.t(r.title), color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(sections[r.section].title + (if (r.group.isNotBlank()) " · " + L.t(r.group) else ""), color = c.sub, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (matches.isEmpty()) {
+                    Text(
+                        L.t("Nothing matches \"{0}\"", query.trim()),
+                        color = c.sub,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(c.panel)
+                ) {
+                    matches.forEachIndexed { idx, r ->
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    cat = r.section
+                                    highlight = r.title
+                                    query = ""
+                                    focus.clearFocus()
+                                    showList = false
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        ) {
+                            Text(
+                                L.t(r.title),
+                                color = c.text,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                sections[r.section].title + (if (r.group.isNotBlank()) " › " + L.t(r.group) else ""),
+                                color = c.accent,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (idx < matches.size - 1) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = c.line.copy(alpha = 0.35f),
+                                thickness = 0.75.dp
+                            )
+                        }
                     }
                 }
-            } else sections.forEachIndexed { i, s ->
-                // the small group headings in the list: Map, Driving, You, Device
-                if (s.heading != null) Text(L.t(s.heading), color = c.sub, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp,
-                    modifier = Modifier.padding(start = 14.dp, top = if (i == 0) 2.dp else 12.dp, bottom = 2.dp))
-                val on = i == cat
-                val rowBg by androidx.compose.animation.animateColorAsState(if (on) c.accent.copy(alpha = 0.16f) else Color.Transparent, androidx.compose.animation.core.tween(200), label = "secBg")
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(rowBg).clickable { cat = i; highlight = null; showList = false }.padding(horizontal = 10.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(38.dp).clip(CircleShape).background(s.tint.copy(alpha = if (on) 0.26f else 0.16f)), contentAlignment = Alignment.Center) {
-                        Icon(s.icon, null, tint = s.tint, modifier = Modifier.size(21.dp))
-                    }
-                    Column(Modifier.padding(start = 12.dp)) {
-                        Text(s.title, color = if (on) c.accent else c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text(s.sub, color = c.sub, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else {
+                categories.forEach { (heading, items) ->
+                    Text(
+                        L.t(heading),
+                        color = c.sub,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.padding(start = 10.dp, top = 6.dp, bottom = 2.dp)
+                    )
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(c.panel)
+                    ) {
+                        items.forEachIndexed { idx, (i, s) ->
+                            val on = i == cat && isDualPane
+                            val rowBg by androidx.compose.animation.animateColorAsState(
+                                if (on) c.accent.copy(alpha = 0.16f) else Color.Transparent,
+                                label = "secBg"
+                            )
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(rowBg)
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = androidx.compose.material3.ripple(),
+                                        onClick = {
+                                            cat = i
+                                            highlight = null
+                                            showList = false
+                                        }
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(s.tint.copy(alpha = if (on) 0.28f else 0.14f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(s.icon, null, tint = s.tint, modifier = Modifier.size(22.dp))
+                                }
+                                Column(
+                                    Modifier
+                                        .weight(1f)
+                                        .padding(start = 14.dp, end = 8.dp)
+                                ) {
+                                    Text(
+                                        s.title,
+                                        color = if (on) c.accent else c.text,
+                                        fontSize = 15.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        s.sub,
+                                        color = c.sub,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                    null,
+                                    tint = c.sub.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            if (idx < items.size - 1) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 72.dp, end = 16.dp),
+                                    color = c.line.copy(alpha = 0.35f),
+                                    thickness = 0.75.dp
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
-        // the chosen section (each opens at the top), sliding up gently into place
-        if (!narrowS || !showList) androidx.compose.animation.AnimatedContent(
+    }
+
+    val detailContent = @Composable { isDualPane: Boolean ->
+        androidx.compose.animation.AnimatedContent(
             targetState = cat,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
+            modifier = Modifier.fillMaxSize(),
             transitionSpec = {
-                (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220, delayMillis = 60)) +
-                    androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(260)) { it / 24 }) togetherWith
+                (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200, delayMillis = 40)) +
+                    androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(240)) { it / 30 }) togetherWith
                     androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
             },
             label = "section",
-        ) { cat ->
-          CompositionLocalProvider(LocalSettingHighlight provides highlight) {
-           // the map pages show the real map at the top, so every change can be seen as it's made
-           val withPreview = cat in 0..3
-           // (in portrait too the preview now stays at the top while the settings scroll under it, as in landscape, so a change
-           // can be seen as it's made, GitHub #124. Only a really short screen still scrolls it away, to leave room for the settings)
-           val pinPreview = !narrowS || androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 600
-           Column(Modifier.fillMaxSize()) {
-            if (withPreview && pinPreview) SettingsMapPreview(engine, if (narrowS) 170 else 210)
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 4.dp)) {
-                if (withPreview && !pinPreview) SettingsMapPreview(engine, 170)
-                if (narrowS) Row(Modifier.padding(bottom = 6.dp).clip(RoundedCornerShape(50)).clickable { showList = true }.padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(42.dp).clip(CircleShape).background(c.tile), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.ArrowBack, L.t("All settings"), tint = c.text, modifier = Modifier.size(22.dp))
+        ) { activeCat ->
+            CompositionLocalProvider(LocalSettingHighlight provides highlight) {
+                val withPreview = activeCat in 0..3
+                val pinPreview = isDualPane || androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 600
+
+                Column(Modifier.fillMaxSize()) {
+                    // Pinned Top App Bar
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = if (isDualPane) 4.dp else 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (!isDualPane) {
+                            Box(
+                                Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(c.tile)
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = androidx.compose.material3.ripple(),
+                                        onClick = { showList = true }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.ArrowBack,
+                                    L.t("All settings"),
+                                    tint = c.text,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(14.dp))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                sections[activeCat].title,
+                                color = c.text,
+                                fontSize = if (isDualPane) 22.sp else 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                sections[activeCat].sub,
+                                color = c.sub,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
-                    Text(L.t("Settings"), color = c.sub, fontSize = 15.sp, modifier = Modifier.padding(start = 10.dp))
-                }
-                Text(sections[cat].title, color = c.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
-                Text(sections[cat].sub, color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp, bottom = 16.dp))
-                Column(Modifier.widthIn(max = 820.dp)) {
-                    when (cat) {
-                        0 -> MapStyleSection(prefs, engine)
-                        1 -> LightSection(prefs)
-                        2 -> OnTheMapSection(prefs, engine)
-                        3 -> ArrowSection(prefs, engine)
-                        4 -> RoutesSection(prefs, engine)
-                        5 -> GuidanceSection(prefs, engine)
-                        6 -> AlertsSection(prefs, engine)
-                        7 -> SoundSection(prefs, engine)
-                        8 -> { PlacesSection(engine); PhoneLinkGroup(prefs); SharingGroups(prefs) }
-                        9 -> FuelSection(prefs, engine)
-                        10 -> { OfflineMapsContent(prefs, engine); OfflinePlacesGroup(engine) }
-                        11 -> ScreenSection(prefs, engine)
-                        12 -> AndroidAutoSection(prefs)
-                        13 -> PerformanceSection(prefs)
-                        14 -> KeysSection(prefs, engine)
-                        else -> AboutSection(prefs, engine)
+
+                    // Pinned live preview if supported and tall screen
+                    if (withPreview && pinPreview) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = if (isDualPane) 4.dp else 16.dp, vertical = 4.dp)
+                        ) {
+                            SettingsMapPreview(engine, if (!isDualPane) 180 else 220)
+                        }
+                    }
+
+                    // Scrollable section body
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = if (isDualPane) 4.dp else 16.dp, vertical = 8.dp)
+                    ) {
+                        if (withPreview && !pinPreview) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp)
+                            ) {
+                                SettingsMapPreview(engine, 175)
+                            }
+                        }
+                        Column(Modifier.widthIn(max = 820.dp)) {
+                            when (activeCat) {
+                                0 -> MapStyleSection(prefs, engine)
+                                1 -> LightSection(prefs)
+                                2 -> OnTheMapSection(prefs, engine)
+                                3 -> ArrowSection(prefs, engine)
+                                4 -> RoutesSection(prefs, engine)
+                                5 -> GuidanceSection(prefs, engine)
+                                6 -> AlertsSection(prefs, engine)
+                                7 -> SoundSection(prefs, engine)
+                                8 -> { PlacesSection(engine); PhoneLinkGroup(prefs); SharingGroups(prefs) }
+                                9 -> FuelSection(prefs, engine)
+                                10 -> { OfflineMapsContent(prefs, engine); OfflinePlacesGroup(engine) }
+                                11 -> ScreenSection(prefs, engine)
+                                12 -> AndroidAutoSection(prefs)
+                                13 -> PerformanceSection(prefs)
+                                14 -> KeysSection(prefs, engine)
+                                else -> AboutSection(prefs, engine)
+                            }
+                            Spacer(Modifier.height(32.dp))
+                        }
                     }
                 }
             }
-           }
-          }
+        }
+    }
+
+    if (narrowS) {
+        // Mobile / Portrait: Edge-to-edge full bleed
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(c.bg)
+        ) {
+            if (showList) {
+                listContent(false)
+            } else {
+                detailContent(false)
+            }
+        }
+    } else {
+        // Tablet / Landscape / Head Unit: Dual Pane
+        Row(
+            Modifier
+                .fillMaxSize()
+                .background(c.bg)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                Modifier
+                    .width(320.dp)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(c.panel)
+            ) {
+                listContent(true)
+            }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(c.panel)
+                    .padding(16.dp)
+            ) {
+                detailContent(true)
+            }
         }
     }
 }
@@ -1508,17 +1791,44 @@ private fun SettingsMapPreview(engine: NavEngine, heightDp: Int) {
         onDispose { }
     }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { engine.map.forceLight(null); PreviewLight.mode = "now" } }
-    Box(Modifier.fillMaxWidth().widthIn(max = 820.dp).height(heightDp.dp).padding(bottom = 10.dp).clip(RoundedCornerShape(20.dp)).border(1.dp, c.line, RoundedCornerShape(20.dp))) {
-        MapHost(engine.map, Modifier.fillMaxSize(), cornerDp = 20)
+    Box(Modifier.fillMaxWidth().widthIn(max = 820.dp).height(heightDp.dp).padding(bottom = 6.dp).clip(RoundedCornerShape(24.dp)).background(c.tile)) {
+        MapHost(engine.map, Modifier.fillMaxSize(), cornerDp = 24)
         // (touches stop here: the preview only shows)
         Box(Modifier.fillMaxSize().pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } })
-        Text(L.t("Live preview"), color = Color.White, fontSize = 12.sp,
-            modifier = Modifier.align(Alignment.TopStart).padding(10.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x99000000)).padding(horizontal = 10.dp, vertical = 4.dp))
-        Row(Modifier.align(Alignment.TopEnd).padding(10.dp).clip(RoundedCornerShape(16.dp)).background(Color(0x99000000))) {
+        Row(
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xCC000000))
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF4CAF50)))
+            Text(L.t("Live preview"), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        }
+        Row(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xCC000000))
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             for ((id, label) in listOf("day" to L.t("Day"), "night" to L.t("Night"), "now" to L.t("Now"))) {
                 val sel = id == mode
-                Box(Modifier.background(if (sel) c.accent else Color.Transparent).pressClick { mode = id }.padding(horizontal = 14.dp, vertical = 7.dp)) {
-                    Text(label, color = Color.White, fontSize = 13.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(if (sel) c.accent else Color.Transparent)
+                        .clickable { mode = id }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(label, color = Color.White, fontSize = 12.5.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
                 }
             }
         }
