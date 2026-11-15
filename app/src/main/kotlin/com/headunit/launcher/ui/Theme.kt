@@ -232,7 +232,7 @@ fun VwTheme(dark: Boolean, content: @Composable () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val supportsDynamic = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
     val useDynamic = supportsDynamic && try {
-        com.headunit.launcher.Prefs(ctx.applicationContext).b("dynamic_color", true)
+        com.headunit.launcher.Prefs(ctx.applicationContext).b(com.headunit.launcher.PreferenceKeys.DYNAMIC_COLOR, true)
     } catch (_: Throwable) {
         true
     }

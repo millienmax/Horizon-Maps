@@ -42,6 +42,7 @@ internal object PreferenceKeys {
     const val UI_AUTO_SCALE = "uiauto"
     const val SOUND_MODE = "soundmode"
     const val FUEL_TYPE = "fueltype"
+    const val DYNAMIC_COLOR = "dynamic_color"
     const val PACK_REGION = "packregion"
     const val ETA_NUMBER = "etanum"
     const val ETA_NAME = "etaname"
