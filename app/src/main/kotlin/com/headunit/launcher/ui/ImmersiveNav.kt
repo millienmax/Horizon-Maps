@@ -5,6 +5,7 @@ import com.headunit.launcher.L
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -153,9 +154,10 @@ private val LocalInRail = androidx.compose.runtime.staticCompositionLocalOf { fa
 @Composable
 private fun ImmCircle(onClick: () -> Unit, size: Dp = 52.dp, active: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     val c = LocalVw.current
+    val shape = RoundedCornerShape(18.dp)
     Box(
-        if (LocalInRail.current) Modifier.size(size).pressClick(onClick).padding(4.dp).clip(CircleShape).background(if (active) c.accent else Color.Transparent)
-        else Modifier.size(size).panel(6.dp, CircleShape, if (active) c.accent else c.surface).pressClick(onClick),
+        if (LocalInRail.current) Modifier.size(size).pressClick(onClick).padding(4.dp).clip(RoundedCornerShape(14.dp)).background(if (active) c.accent else Color.Transparent)
+        else Modifier.size(size).panel(5.dp, shape, if (active) c.accent else c.surface).pressClick(onClick),
         contentAlignment = Alignment.Center, content = content,
     )
 }
@@ -1003,6 +1005,7 @@ internal fun ImmTurnCard(
     footer: (@Composable () -> Unit)? = null,
 ) { TextSides {
     val shape = RoundedCornerShape(28.dp)
+    val c = LocalVw.current
     val frac = ((450.0 - t.dist) / 450.0).coerceIn(0.0, 1.0).toFloat()
     // living card: it grows a touch and starts to glow as the turn comes up, and pulses in the last 80 m
     val alive = engine.prefs.b(PreferenceKeys.LIVECARD, true)
@@ -1012,23 +1015,24 @@ internal fun ImmTurnCard(
     // only runs in the last 80 m, so the screen isn't redrawn constantly the rest of the time
     // read only while drawing, so the pulse repaints the card without recomposing it 60 times a second
     val pulse = rememberPulse(alive && t.dist < 80.0, 650)
-    val glowCol = Color(0xFF7FFFE6)
+    val turnBg = if (c.dark) androidx.compose.ui.graphics.lerp(Color(0xFF00497D), c.accent, 0.15f * glow) else androidx.compose.ui.graphics.lerp(Color(0xFF0061A4), Color(0xFF00497D), 0.15f * glow)
     Column(
         Modifier.fillMaxWidth()
             .graphicsLayer { scaleX = grow; scaleY = grow; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f) }
-            .shadow((if (compact) 5f else 12f + 14f * glow).dp, shape, ambientColor = glowCol, spotColor = glowCol)
+            .shadow(
+                elevation = (if (compact) 4f else 8f + 6f * glow).dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.22f),
+                spotColor = Color.Black.copy(alpha = 0.30f)
+            )
             .clip(shape)
-            .background(androidx.compose.ui.graphics.lerp(Teal, Color(0xFF14C9A6), 0.35f * glow))
-            .border(1.5.dp, Color.White.copy(alpha = 0.18f + 0.25f * glow), shape)
+            .background(turnBg)
             .drawWithContent {
                 drawContent()
                 val pv = pulse.value
                 if (pv > 0.01f) {
-                    drawRect(Color.White.copy(alpha = 0.10f * pv))
-                    val sw = (1.5f + 1.5f * pv) * density
-                    drawRoundRect(Color.White.copy(alpha = 0.45f * glow * pv), topLeft = Offset(sw / 2, sw / 2),
-                        size = androidx.compose.ui.geometry.Size(size.width - sw, size.height - sw),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(sw))
+                    drawRect(Color.White.copy(alpha = 0.08f * pv))
                 }
             }
             .animateContentSize()
@@ -1133,22 +1137,22 @@ internal fun ImmTurnCard(
 @Composable
 private fun ImmSearch(engine: NavEngine, q: String, onQ: (String) -> Unit, locked: Boolean, focus: FocusRequester, voice: () -> Unit) { TextSides {
     val c = LocalVw.current
-    val shape = RoundedCornerShape(30.dp)
-    Box(Modifier.fillMaxWidth().height(60.dp).panel(10.dp, shape, c.surface)) {
+    val shape = RoundedCornerShape(28.dp)
+    Box(Modifier.fillMaxWidth().height(58.dp).panel(6.dp, shape, c.surface)) {
         TextField(
             value = q, onValueChange = onQ, enabled = !locked,
-            placeholder = { Text(if (locked) L.t("Tap the mic to search while driving") else L.t("Where to?"), fontSize = if (locked) 15.sp else 18.sp) },
-            leadingIcon = { Icon(Icons.Rounded.Search, null, tint = c.sub) },
+            placeholder = { Text(if (locked) L.t("Tap the mic to search while driving") else L.t("Where to?"), fontSize = if (locked) 15.sp else 17.sp, fontWeight = FontWeight.Normal) },
+            leadingIcon = { Icon(Icons.Rounded.Search, null, tint = c.accent, modifier = Modifier.size(24.dp)) },
             trailingIcon = {
                 if (q.isNotEmpty()) Icon(Icons.Rounded.Close, L.t("Clear"), tint = c.sub, modifier = Modifier.padding(end = 8.dp).clickable { onQ(""); engine.results = emptyList() })
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     // folds Saved & recent up under the bar, and back down again
                     val open = engine.prefs.b(PreferenceKeys.QUICKLIST, true)
                     Box(Modifier.padding(end = 4.dp).size(40.dp).clip(CircleShape).clickable { engine.prefs.put(PreferenceKeys.QUICKLIST, !open) }, contentAlignment = Alignment.Center) {
-                        Icon(if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, if (open) L.t("Hide saved and recent") else L.t("Show saved and recent"), tint = c.sub, modifier = Modifier.size(26.dp))
+                        Icon(if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, if (open) L.t("Hide saved and recent") else L.t("Show saved and recent"), tint = c.sub, modifier = Modifier.size(24.dp))
                     }
-                    Box(Modifier.padding(end = 8.dp).size(44.dp).clip(CircleShape).background(c.accent).pressClick { voice() }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Mic, L.t("Voice search"), tint = Color.White, modifier = Modifier.size(23.dp))
+                    Box(Modifier.padding(end = 8.dp).size(42.dp).clip(RoundedCornerShape(14.dp)).background(c.accent).pressClick { voice() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Mic, L.t("Voice search"), tint = if (c.accent.luminance() > 0.5f) Color(0xFF003258) else Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
             },
@@ -1244,9 +1248,9 @@ private fun PlaceTile(engine: NavEngine, modifier: Modifier, icon: ImageVector, 
         here != null -> Geo.fmtDist(Geo.dist(here, place.pos), engine.imperial)
         else -> place.sub
     }
-    Row(modifier.height(58.dp).panel(6.dp, RoundedCornerShape(20.dp), c.surface).pressClick(onClick).padding(horizontal = 10.dp),
+    Row(modifier.height(58.dp).panel(5.dp, RoundedCornerShape(22.dp), c.surface).pressClick(onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(36.dp).clip(CircleShape).background(tint.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp)) }
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp)) }
         Column(Modifier.padding(start = 10.dp).weight(1f)) {
             Text(if (place == null) L.t("Set {0}", if (L.en) label.lowercase() else label) else label, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(sub, color = c.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1257,7 +1261,8 @@ private fun PlaceTile(engine: NavEngine, modifier: Modifier, icon: ImageVector, 
 @Composable
 private fun FindButton(icon: ImageVector, tint: Color, desc: String, onClick: () -> Unit) {
     val c = LocalVw.current
-    Box(Modifier.size(50.dp).panel(6.dp, CircleShape, c.surface).pressClick(onClick), contentAlignment = Alignment.Center) {
+    val shape = RoundedCornerShape(16.dp)
+    Box(Modifier.size(52.dp).panel(5.dp, shape, c.surface).pressClick(onClick), contentAlignment = Alignment.Center) {
         Icon(icon, desc, tint = tint, modifier = Modifier.size(24.dp))
     }
 }
@@ -1454,6 +1459,7 @@ private fun ItineraryCard(engine: NavEngine) {
     @Suppress("UNUSED_VARIABLE") val tick = engine.turn   // read so the list moves along as you drive
     val rows = engine.itinerary()
     val shape = RoundedCornerShape(28.dp)
+    val c = LocalVw.current
     var picked by remember { mutableStateOf(-1) }
     var touched by remember { mutableStateOf(0) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()

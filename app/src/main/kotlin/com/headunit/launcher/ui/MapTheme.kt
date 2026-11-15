@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.headunit.launcher.NavEngine
 import com.headunit.launcher.PreferenceKeys
 
@@ -52,4 +53,10 @@ fun glassVw(c: Vw): Vw =
  * because the shadow would show through the fill as a faint ring and corner lines.
  */
 fun Modifier.panel(elev: Dp, shape: Shape, fill: Color): Modifier =
-    (if (fill.alpha >= 0.99f) this.shadow(elev, shape) else this).clip(shape).background(fill)
+    (if (fill.alpha >= 0.99f) this.shadow(
+        elevation = (elev * 0.75f).coerceAtLeast(3.dp),
+        shape = shape,
+        clip = false,
+        ambientColor = Color.Black.copy(alpha = 0.16f),
+        spotColor = Color.Black.copy(alpha = 0.22f)
+    ) else this).clip(shape).background(fill)

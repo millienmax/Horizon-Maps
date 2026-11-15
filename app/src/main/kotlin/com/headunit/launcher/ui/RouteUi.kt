@@ -711,6 +711,7 @@ fun PackAgeCard(engine: NavEngine) {
 /** A newer version of the app is out (shareable build only): Update downloads it and opens the installer; Later hides it for a few days. */
 @Composable
 fun AppUpdateCard(engine: NavEngine) {
+    if (com.headunit.launcher.BuildConfig.DEBUG) return
     val u = engine.appUpdate ?: return
     val c = LocalVw.current
     val shape = RoundedCornerShape(22.dp)
