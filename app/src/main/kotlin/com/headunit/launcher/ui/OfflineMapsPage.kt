@@ -101,7 +101,7 @@ internal fun OfflineMapsContent(prefs: Prefs, engine: NavEngine) {
     }
 
     MapboxOfflineGroup(prefs, engine)
-    SGroup(L.t("Downloaded areas"), footer = L.t("Keep as many areas as you like: the one you're in is used automatically (routes work offline within one area). Each is a snapshot of the roads on the day it was built, so update now and then.") + if (free >= 0) " ${fmtSize(free)} free." else "") {
+    SGroup(L.t("Downloaded areas"), footer = L.t("Offline navigation works within downloaded areas.") + if (free >= 0) " ${fmtSize(free)} free." else "") {
         if (have.isEmpty()) SNote(L.t("Nothing downloaded yet. Pick an area below and download it on Wi-Fi."))
         for (id in have) {
             val r = PackRegions.byId(id)
@@ -138,11 +138,15 @@ internal fun OfflineMapsContent(prefs: Prefs, engine: NavEngine) {
     }
     SGroup(L.t("Without signal")) {
         SToggle(prefs, L.t("Offline mode"), PreferenceKeys.OFFLINE_MODE, false,
-            L.t("Nothing goes online: no traffic, weather or online search, and the app stops looking for a signal. Routes, search, limits and cameras come from your downloaded pack. Downloads you start still work"))
+            L.t("Disables network access and forces offline routing"))
         val offlineOn = prefs.b(PreferenceKeys.OFFLINE_MODE, false)
         androidx.compose.runtime.LaunchedEffect(offlineOn) { engine.setOfflineMode(offlineOn) }
-        SChoice(L.t("Which map to draw"), listOf("auto" to L.t("Auto"), "always" to L.t("Downloaded"), "never" to L.t("Online")), prefs.s(PreferenceKeys.OFF_MAP, "auto"),
-            L.t("Auto: with no signal Mapbox's map carries on with the areas it has stored (where you've been recently, and saved Mapbox areas); the downloaded pack's map takes over only where Mapbox has nothing, and the online map comes back with signal")) { prefs.put(PreferenceKeys.OFF_MAP, it); engine.restyle() }
+        val mapSub = when (prefs.s(PreferenceKeys.OFF_MAP, "auto")) {
+            "auto" -> L.t("Uses cached map tiles, falling back to downloaded pack")
+            "always" -> L.t("Always renders from downloaded offline pack")
+            else -> L.t("Always streams online map tiles")
+        }
+        SChoice(L.t("Which map to draw"), listOf("auto" to L.t("Auto"), "always" to L.t("Downloaded"), "never" to L.t("Online")), prefs.s(PreferenceKeys.OFF_MAP, "auto"), mapSub) { prefs.put(PreferenceKeys.OFF_MAP, it); engine.restyle() }
     }
     if (picking) PackPickerDialog(region, { prefs.put(PreferenceKeys.PACK_REGION, it.id) }, engine.fix?.pos ?: engine.map.center()) { picking = false }
 }
