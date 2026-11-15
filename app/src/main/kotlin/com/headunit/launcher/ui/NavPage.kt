@@ -39,6 +39,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddRoad
+import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.foundation.layout.widthIn
 import com.headunit.launcher.LaneSec
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -267,14 +268,17 @@ internal fun BoxScope.RoutePreview(engine: NavEngine) {
     }
     val startBtn: @Composable (Modifier) -> Unit = { m ->
         Box(
-            m.height(72.dp).clip(RoundedCornerShape(36.dp)).background(c.accent.copy(alpha = 0.30f))
+            m.height(64.dp).clip(RoundedCornerShape(32.dp)).background(c.accent.copy(alpha = 0.30f))
                 .clickable { engine.beginNavigation() },
             contentAlignment = Alignment.Center,
         ) {
             Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(progress.value).background(c.accent))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(L.t(if (engine.demoNext) "Start demo drive" else "Start navigation"), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Text(if (hold) L.t("Planned for later") else if (autoStart) L.t("Starting in {0} s", kotlin.math.ceil((1f - progress.value) * (countdownMs / 1000f)).toInt()) else L.t("Tap to start"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(24.dp).padding(end = 6.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(L.t(if (engine.demoNext) "Start demo drive" else "Start navigation"), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(if (hold) L.t("Planned for later") else if (autoStart) L.t("Starting in {0} s", kotlin.math.ceil((1f - progress.value) * (countdownMs / 1000f)).toInt()) else L.t("Tap to start"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+                }
             }
         }
     }

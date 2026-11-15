@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Place
@@ -83,20 +84,36 @@ internal fun SeeAllRow(engine: NavEngine, q: String, count: Int, onOpen: () -> U
     val first = engine.results.firstOrNull { Logos.norm(it.name).startsWith(Logos.norm(q)) } ?: engine.results.first()
     val here = engine.fix?.pos
     val nearest = if (here != null) engine.results.filter { Logos.norm(it.name).startsWith(Logos.norm(q)) }.minOfOrNull { Geo.dist(here, it.pos) } else null
+    val shape = RoundedCornerShape(18.dp)
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).clip(RoundedCornerShape(18.dp)).background(ChainBlue.copy(alpha = 0.13f))
-            .border(2.dp, ChainBlue, RoundedCornerShape(18.dp)).clickable { onOpen(); engine.openChain(q) }.padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .clip(shape)
+            .background(c.accent.copy(alpha = 0.12f))
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = androidx.compose.material3.ripple(),
+                onClick = { onOpen(); engine.openChain(q) }
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PlaceLogo(first, 44.dp) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(c.tile), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Map, null, tint = ChainBlue, modifier = Modifier.size(22.dp)) }
+        PlaceLogo(first, 42.dp) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(c.accent.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Map, null, tint = c.accent, modifier = Modifier.size(22.dp))
+            }
         }
         Column(Modifier.padding(start = 14.dp).weight(1f)) {
-            Text(L.t("See all {0} locations", count), color = c.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-            Text(L.t(if (engine.imperial) "Within 10 miles" else "Within 15 km") + (nearest?.let { " · " + L.t("nearest {0}", Geo.fmtDist(it, engine.imperial)) } ?: ""),
-                color = c.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(L.t("See all {0} locations", count), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                L.t(if (engine.imperial) "Within 10 miles" else "Within 15 km") + (nearest?.let { " · " + L.t("nearest {0}", Geo.fmtDist(it, engine.imperial)) } ?: ""),
+                color = c.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
         }
-        Icon(Icons.Rounded.Map, null, tint = ChainBlue, modifier = Modifier.size(26.dp))
+        Box(Modifier.size(32.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.ChevronRight, null, tint = c.accent, modifier = Modifier.size(20.dp))
+        }
     }
 }
 

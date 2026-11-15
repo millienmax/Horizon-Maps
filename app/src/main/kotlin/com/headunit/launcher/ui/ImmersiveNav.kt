@@ -1,6 +1,8 @@
 package com.headunit.launcher.ui
 
 import com.headunit.launcher.L
+import com.headunit.launcher.Place
+import com.headunit.launcher.LL
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -40,6 +42,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.material.icons.rounded.Flight
+import androidx.compose.material.icons.rounded.Hotel
+import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +63,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Park
@@ -129,7 +146,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.headunit.launcher.Geo
-import com.headunit.launcher.LL
 import com.headunit.launcher.NavEngine
 import kotlinx.coroutines.delay
 import com.headunit.launcher.PreferenceKeys
@@ -217,17 +233,41 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
     }
     val typingLocked by remember { derivedStateOf { (engine.fix?.speed ?: 0.0) > 3.0 && engine.prefs.b(PreferenceKeys.DRIVELOCK, true) } }
     val focus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    var searchFocused by remember { mutableStateOf(false) }
+    val routing = engine.route != null && !engine.previewing
+    val previewing = engine.previewing
+    val searchActive = (q.isNotEmpty() || engine.results.isNotEmpty() || searchFocused) && !routing && !previewing
+
+    fun dismissSearch() {
+        q = ""
+        engine.results = emptyList()
+        searchFocused = false
+        try { focusManager.clearFocus() } catch (_: Exception) {}
+    }
+
     LaunchedEffect(q) {
         if (q.length >= 3) { delay(500); engine.search(q) } else if (q.isEmpty()) engine.results = emptyList()
     }
     // text shared from another app goes into the search box
-    LaunchedEffect(engine.externalQuery) { engine.externalQuery?.let { q = it; engine.externalQuery = null } }
+    LaunchedEffect(engine.externalQuery) { engine.externalQuery?.let { q = it; engine.externalQuery = null; searchFocused = true } }
     BackHandler(enabled = sheet) { sheet = false }
-    val routing = engine.route != null && !engine.previewing
-    val previewing = engine.previewing
+    BackHandler(enabled = searchActive && !sheet) { dismissSearch() }
     val simple by remember { derivedStateOf { engine.driving && engine.prefs.b(PreferenceKeys.DRIVESIMPLE, true) } }
 
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (searchActive) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .zIndex(5f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { dismissSearch() }
+                    )
+            )
+        }
         // portrait (or any narrow window): cards use the full width, the round buttons stack down the right-hand side,
         // and your speed and the re-centre button sit just above the trip card instead of beside it
         val narrow = maxWidth < 720.dp
@@ -254,6 +294,14 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         val speedOnCardSide = (speedAt == "left") != mir
         // Settings > sizes > map buttons: scales the button column on the right
         val mainButtonScale = engine.prefs.i(PreferenceKeys.MAIN_BUTTON_SIZE, 100).coerceIn(70, 150) / 100f
+        val narrowEndPadding by animateDpAsState(
+            targetValue = if (searchActive) 0.dp else (52.dp * mainButtonScale + 10.dp),
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            ),
+            label = "searchEndPadding"
+        )
         fun side(a: Alignment): Alignment = if (!mir) a else when (a) {
             Alignment.TopStart -> Alignment.TopEnd; Alignment.TopEnd -> Alignment.TopStart
             Alignment.CenterStart -> Alignment.CenterEnd; Alignment.CenterEnd -> Alignment.CenterStart
@@ -262,31 +310,68 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         }
         // padding on the "outer" (screen edge) and "inner" sides, swapped when mirrored
         fun Modifier.sides(start: androidx.compose.ui.unit.Dp = 0.dp, end: androidx.compose.ui.unit.Dp = 0.dp, top: androidx.compose.ui.unit.Dp = 0.dp, bottom: androidx.compose.ui.unit.Dp = 0.dp) =
-            if (mir) padding(start = end, end = start, top = top, bottom = bottom) else padding(start = start, end = end, top = top, bottom = bottom)
+            if (mir) padding(start = end.coerceAtLeast(0.dp), end = start.coerceAtLeast(0.dp), top = top.coerceAtLeast(0.dp), bottom = bottom.coerceAtLeast(0.dp))
+            else padding(start = start.coerceAtLeast(0.dp), end = end.coerceAtLeast(0.dp), top = top.coerceAtLeast(0.dp), bottom = bottom.coerceAtLeast(0.dp))
         // ---- top left: search while idle; the turn card and its companions while navigating
         // the panels' outlines (as parts of the screen) go to the camera, so your arrow is moved clear of whatever is beside it
         val boxW = constraints.maxWidth.toFloat().coerceAtLeast(1f); val boxH = constraints.maxHeight.toFloat().coerceAtLeast(1f)
         fun report(i: Int, r: androidx.compose.ui.geometry.Rect) { engine.setPanel(i, r.left / boxW, r.top / boxH, r.right / boxW, r.bottom / boxH) }
         // the "all locations" panel sits in the same corner and lets the map show through, so the search and its results step aside while it's open
-        if (engine.chain == null && !engine.chainBusy) Column(Modifier.align(side(Alignment.TopStart)).padding(16.dp).then(if (narrow) Modifier.fillMaxWidth().sides(end = 52.dp * mainButtonScale + 10.dp) else Modifier.width(380.dp))
-            .onGloballyPositioned { report(0, it.boundsInParent()) }
-            // the turn list opens over the trip card below it
-            .zIndex(if (engine.itineraryOpen) 2f else 0f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (engine.chain == null && !engine.chainBusy) Column(
+            Modifier
+                .align(side(Alignment.TopStart))
+                .padding(16.dp)
+                .then(if (narrow) Modifier.fillMaxWidth().sides(end = narrowEndPadding) else Modifier.width(if (searchActive) 440.dp else 380.dp))
+                .onGloballyPositioned { report(0, it.boundsInParent()) }
+                .zIndex(if (searchActive) 10f else if (engine.itineraryOpen) 2f else 0f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             // every block slides and fades in and out instead of popping, so the screen changes feel like one piece
             AnimatedVisibility(!routing && !previewing, enter = fadeIn(tween(220)) + androidx.compose.animation.expandVertically(tween(260)), exit = fadeOut(tween(160)) + androidx.compose.animation.shrinkVertically(tween(220))) {
               Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                ImmSearch(engine, q, { q = it }, typingLocked, focus, voice)
+                ImmSearch(
+                    engine = engine,
+                    q = q,
+                    onQ = { q = it },
+                    locked = typingLocked,
+                    focus = focus,
+                    searchActive = searchActive,
+                    onSearchActiveChange = { searchFocused = it },
+                    onDismissSearch = { dismissSearch() },
+                    voice = voice
+                )
                 engine.phoneDest?.let { pd -> PhoneDestCard(engine, pd) }
-                val showResults = engine.results.isNotEmpty()
-                AnimatedVisibility(showResults, enter = fadeIn(tween(180)) + androidx.compose.animation.expandVertically(tween(240)), exit = fadeOut(tween(120)) + androidx.compose.animation.shrinkVertically(tween(180))) {
-                    ImmResults(engine, q) { q = "" }
+                val showResults = searchActive && engine.results.isNotEmpty()
+                AnimatedVisibility(
+                    visible = showResults,
+                    enter = fadeIn(tween(180)) + androidx.compose.animation.expandVertically(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow)),
+                    exit = fadeOut(tween(120)) + androidx.compose.animation.shrinkVertically(tween(180))
+                ) {
+                    ImmResults(engine, q) { dismissSearch() }
                 }
-                AnimatedVisibility(!showResults && q.isEmpty() && engine.nearbyKind == null, enter = fadeIn(tween(220)) + androidx.compose.animation.expandVertically(tween(260)), exit = fadeOut(tween(140)) + androidx.compose.animation.shrinkVertically(tween(200))) {
+                val showSuggestions = searchActive && q.isEmpty()
+                AnimatedVisibility(
+                    visible = showSuggestions,
+                    enter = fadeIn(tween(180)) + androidx.compose.animation.expandVertically(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow)),
+                    exit = fadeOut(tween(120)) + androidx.compose.animation.shrinkVertically(tween(180))
+                ) {
+                    ImmSuggestions(
+                        engine = engine,
+                        onQuery = { newQ -> q = newQ; engine.search(newQ) },
+                        onPick = { dismissSearch() }
+                    )
+                }
+                AnimatedVisibility(!searchActive && engine.nearbyKind == null, enter = fadeIn(tween(220)) + androidx.compose.animation.expandVertically(tween(260)), exit = fadeOut(tween(140)) + androidx.compose.animation.shrinkVertically(tween(200))) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         // your places (Home, Work...) always stay under the search bar; while you drive with no route, the suggestion and
                         // resume cards stay too and the rest folds away
                         val cruising = engine.cruising
-                        ImmChips(engine) { try { focus.requestFocus() } catch (_: Exception) {} }
+                        ImmChips(engine) {
+                            try {
+                                searchFocused = true
+                                focus.requestFocus()
+                            } catch (_: Exception) {}
+                        }
                         AnimatedVisibility(!cruising, enter = fadeIn(tween(220)) + androidx.compose.animation.expandVertically(tween(260)), exit = fadeOut(tween(140)) + androidx.compose.animation.shrinkVertically(tween(200))) {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 PlannedCard(engine)
@@ -333,7 +418,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         }
 
         // ---- right side: the map buttons grouped in one panel at the top, zoom under it, and Settings beside it
-        if (!previewing) {
+        if (!previewing && !searchActive) {
             val buttonBaseDensity = LocalDensity.current
             // just two buttons on the map: the compass and map options. 3D / 2D and sound are at the top of map options, voice and sound
             // are on the trip card while navigating, Settings is beside these when you're not (and in map options' header when you are)
@@ -448,7 +533,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         val besideButtons = with(dens) { buttonsWPx.toDp() } + 26.dp
         // (Card positions: on the other side if chosen, and lifted above the trip card when they share a corner)
         val speedShareTrip = !narrow && tripPx > 0 && tripAt == speedAt
-        if (!previewing) Box(
+        if (!previewing && !searchActive) Box(
             when {
                 speedOnCardSide -> Modifier.align(if (speedAt == "left") Alignment.BottomStart else Alignment.BottomEnd)
                     .padding(start = 16.dp, end = 16.dp, bottom = if (speedShareTrip) tripH + 8.dp else 16.dp)
@@ -466,7 +551,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
 
         // ---- bottom left: hazards and the trip card (not while the "all locations" / add-a-stop panel is open: it's in the same
         // corner and the panel lets the map show through, so the trip card's figures showed through it)
-        if (!previewing && engine.arrival == null && engine.chain == null && !engine.chainBusy) {
+        if (!previewing && !searchActive && engine.arrival == null && engine.chain == null && !engine.chainBusy) {
             val tripBaseDensity = LocalDensity.current
             val tripCardScale = engine.prefs.i(PreferenceKeys.MAIN_CARD_SIZE, 100).coerceIn(70, 150) / 100f
             val tripAlign = when (tripAt) { "centre" -> Alignment.BottomCenter; "right" -> Alignment.BottomEnd; "left" -> Alignment.BottomStart; else -> side(Alignment.BottomStart) }
@@ -1135,30 +1220,184 @@ internal fun ImmTurnCard(
 } }
 
 @Composable
-private fun ImmSearch(engine: NavEngine, q: String, onQ: (String) -> Unit, locked: Boolean, focus: FocusRequester, voice: () -> Unit) { TextSides {
+internal fun ExpressivePlaceIcon(p: Place, size: androidx.compose.ui.unit.Dp = 42.dp) {
+    val c = LocalVw.current
+    PlaceLogo(p, size) {
+        val lower = remember(p) { (p.name + " " + p.sub).lowercase() }
+        val (icon, bg, tint) = remember(lower) {
+            when {
+                lower.contains("airport") || lower.contains("terminal") || lower.contains("aerodrome") ->
+                    Triple(Icons.Rounded.Flight, Color(0xFFE8DEF8), Color(0xFF6750A4))
+                lower.contains("gas") || lower.contains("fuel") || lower.contains("petrol") || lower.contains("diesel") || lower.contains("chevron") || lower.contains("shell") ->
+                    Triple(Icons.Rounded.LocalGasStation, Color(0xFFFFDBCF), Color(0xFFB3261E))
+                lower.contains("supercharger") || lower.contains("charging") || lower.contains("ev ") || lower.contains("electric") ->
+                    Triple(Icons.Rounded.EvStation, Color(0xFFC4EED0), Color(0xFF146C2E))
+                lower.contains("coffee") || lower.contains("cafe") || lower.contains("starbucks") ->
+                    Triple(Icons.Rounded.LocalCafe, Color(0xFFFFDCC2), Color(0xFF825500))
+                lower.contains("restaurant") || lower.contains("food") || lower.contains("pizza") || lower.contains("burger") || lower.contains("diner") ->
+                    Triple(Icons.Rounded.Restaurant, Color(0xFFFFD8E4), Color(0xFF8C1D18))
+                lower.contains("hotel") || lower.contains("motel") || lower.contains("inn") || lower.contains("suites") ->
+                    Triple(Icons.Rounded.Hotel, Color(0xFFD3E3FD), Color(0xFF0B57D0))
+                lower.contains("parking") || lower.contains("garage") ->
+                    Triple(Icons.Rounded.LocalParking, Color(0xFFEADDFF), Color(0xFF21005D))
+                lower.contains("market") || lower.contains("grocery") || lower.contains("store") || lower.contains("shop") ->
+                    Triple(Icons.Rounded.Storefront, Color(0xFFD0F8EC), Color(0xFF006B56))
+                else ->
+                    Triple(Icons.Rounded.Place, c.tile, Color(0xFFEA4335))
+            }
+        }
+        Box(
+            Modifier.size(size).clip(RoundedCornerShape(14.dp)).background(bg),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(size * 0.52f))
+        }
+    }
+}
+
+@Composable
+private fun ImmSearch(
+    engine: NavEngine,
+    q: String,
+    onQ: (String) -> Unit,
+    locked: Boolean,
+    focus: FocusRequester,
+    searchActive: Boolean,
+    onSearchActiveChange: (Boolean) -> Unit,
+    onDismissSearch: () -> Unit,
+    voice: () -> Unit
+) { TextSides {
     val c = LocalVw.current
     val shape = RoundedCornerShape(28.dp)
-    Box(Modifier.fillMaxWidth().height(58.dp).panel(6.dp, shape, c.surface)) {
+    val focusManager = LocalFocusManager.current
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(58.dp)
+            .shadow(
+                elevation = if (searchActive) 8.dp else 4.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.14f),
+                spotColor = Color.Black.copy(alpha = 0.20f)
+            )
+            .clip(shape)
+            .background(c.surface)
+    ) {
         TextField(
-            value = q, onValueChange = onQ, enabled = !locked,
-            placeholder = { Text(if (locked) L.t("Tap the mic to search while driving") else L.t("Where to?"), fontSize = if (locked) 15.sp else 17.sp, fontWeight = FontWeight.Normal) },
-            leadingIcon = { Icon(Icons.Rounded.Search, null, tint = c.accent, modifier = Modifier.size(24.dp)) },
-            trailingIcon = {
-                if (q.isNotEmpty()) Icon(Icons.Rounded.Close, L.t("Clear"), tint = c.sub, modifier = Modifier.padding(end = 8.dp).clickable { onQ(""); engine.results = emptyList() })
-                else Row(verticalAlignment = Alignment.CenterVertically) {
-                    // folds Saved & recent up under the bar, and back down again
-                    val open = engine.prefs.b(PreferenceKeys.QUICKLIST, false)
-                    Box(Modifier.padding(end = 4.dp).size(40.dp).clip(CircleShape).clickable { engine.prefs.put(PreferenceKeys.QUICKLIST, !open) }, contentAlignment = Alignment.Center) {
-                        Icon(if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, if (open) L.t("Hide saved and recent") else L.t("Show saved and recent"), tint = c.sub, modifier = Modifier.size(24.dp))
+            value = q,
+            onValueChange = {
+                onQ(it)
+                if (it.isNotEmpty()) onSearchActiveChange(true)
+            },
+            enabled = !locked,
+            placeholder = {
+                Text(
+                    if (locked) L.t("Tap the mic to search while driving") else L.t("Where to?"),
+                    fontSize = if (locked) 15.sp else 17.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = c.sub
+                )
+            },
+            leadingIcon = {
+                AnimatedContent(
+                    targetState = searchActive || q.isNotEmpty(),
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(180)) + scaleIn(initialScale = 0.8f)) togetherWith
+                        (fadeOut(animationSpec = tween(140)) + scaleOut(targetScale = 0.8f))
+                    },
+                    label = "searchLeadingIcon"
+                ) { isBack ->
+                    if (isBack) {
+                        Box(
+                            Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = androidx.compose.material3.ripple(),
+                                    onClick = onDismissSearch
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Rounded.ArrowBack, L.t("Back"), tint = c.text, modifier = Modifier.size(24.dp))
+                        }
+                    } else {
+                        Icon(Icons.Rounded.Search, null, tint = c.accent, modifier = Modifier.size(24.dp))
                     }
-                    Box(Modifier.padding(end = 8.dp).size(42.dp).clip(RoundedCornerShape(14.dp)).background(c.accent).pressClick { voice() }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Mic, L.t("Voice search"), tint = if (c.accent.luminance() > 0.5f) Color(0xFF003258) else Color.White, modifier = Modifier.size(22.dp))
+                }
+            },
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AnimatedVisibility(
+                        visible = q.isNotEmpty(),
+                        enter = fadeIn(tween(180)) + scaleIn(spring(Spring.DampingRatioMediumBouncy)),
+                        exit = fadeOut(tween(120)) + scaleOut()
+                    ) {
+                        Box(
+                            Modifier
+                                .padding(end = 4.dp)
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = androidx.compose.material3.ripple(),
+                                    onClick = { onQ(""); engine.results = emptyList() }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Rounded.Close, L.t("Clear"), tint = c.sub, modifier = Modifier.size(20.dp))
+                        }
+                    }
+
+                    if (q.isEmpty()) {
+                        if (!searchActive) {
+                            val open = engine.prefs.b(PreferenceKeys.QUICKLIST, false)
+                            Box(
+                                Modifier
+                                    .padding(end = 4.dp)
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = androidx.compose.material3.ripple(),
+                                        onClick = { engine.prefs.put(PreferenceKeys.QUICKLIST, !open) }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                                    if (open) L.t("Hide saved and recent") else L.t("Show saved and recent"),
+                                    tint = c.sub,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                        Box(
+                            Modifier
+                                .padding(end = 8.dp)
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(c.accent)
+                                .pressClick { voice() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.Mic,
+                                L.t("Voice search"),
+                                tint = if (c.accent.luminance() > 0.5f) Color(0xFF003258) else Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
             },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { engine.search(q) }),
+            keyboardActions = KeyboardActions(onSearch = {
+                engine.search(q)
+                focusManager.clearFocus()
+            }),
             shape = shape,
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = c.surface, unfocusedContainerColor = c.surface, disabledContainerColor = c.surface,
@@ -1167,33 +1406,201 @@ private fun ImmSearch(engine: NavEngine, q: String, onQ: (String) -> Unit, locke
                 focusedPlaceholderColor = c.sub, unfocusedPlaceholderColor = c.sub, disabledPlaceholderColor = c.sub,
                 cursorColor = c.accent,
             ),
-            modifier = Modifier.fillMaxSize().focusRequester(focus),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focus)
+                .onFocusChanged { focusState ->
+                    if (focusState.isFocused) {
+                        onSearchActiveChange(true)
+                    }
+                }
         )
     }
 } }
 
 @Composable
-private fun ImmResults(engine: NavEngine, q: String, onPicked: () -> Unit) {
+private fun ImmSuggestions(
+    engine: NavEngine,
+    onQuery: (String) -> Unit,
+    onPick: (Place) -> Unit
+) {
     val c = LocalVw.current
-    val shape = RoundedCornerShape(26.dp)
+    val shape = RoundedCornerShape(24.dp)
+    val recents = remember(engine.places) { engine.places.recents().take(5) }
     val here = engine.fix?.pos
-    // several branches of what was searched nearby (Lidl, Sainsbury's…): "See all N locations" at the top
-    val chainN = remember(engine.results, q) { if (q.trim().length >= 2) engine.chainCount(q.trim()) else 0 }
-    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp).panel(10.dp, shape, c.surface).padding(vertical = 6.dp)) {
-        if (chainN >= 2) item { SeeAllRow(engine, q.trim(), chainN) { } }
-        items(engine.results) { p ->
-            Row(Modifier.fillMaxWidth().clickable { onPicked(); engine.pickPlace(p) }.padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                // the shop's own logo where there is one
-                PlaceLogo(p, 42.dp) {
-                    Box(Modifier.size(42.dp).clip(CircleShape).background(c.tile), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Place, null, tint = Color(0xFFEA4335), modifier = Modifier.size(22.dp))
+
+    LazyColumn(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 440.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.16f),
+                spotColor = Color.Black.copy(alpha = 0.22f)
+            )
+            .clip(shape)
+            .background(c.panel)
+            .padding(vertical = 12.dp)
+    ) {
+        item {
+            Text(
+                L.t("QUICK CATEGORIES"),
+                color = c.sub,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val chips = listOf(
+                    Triple("Fuel", Icons.Rounded.LocalGasStation, Color(0xFFEA4335)),
+                    Triple("EV Charging", Icons.Rounded.EvStation, Color(0xFF34A853)),
+                    Triple("Food", Icons.Rounded.Restaurant, Color(0xFFFBBC04)),
+                    Triple("Coffee", Icons.Rounded.LocalCafe, Color(0xFF825500)),
+                    Triple("Parking", Icons.Rounded.LocalParking, Color(0xFF4285F4)),
+                    Triple("Groceries", Icons.Rounded.Storefront, Color(0xFF009688))
+                )
+                for ((label, icon, color) in chips) {
+                    Row(
+                        Modifier
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(color.copy(alpha = 0.12f))
+                            .pressClick { onQuery(label) }
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(icon, null, tint = color, modifier = Modifier.size(18.dp))
+                        Text(
+                            label,
+                            color = c.text,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
                     }
                 }
+            }
+        }
+
+        if (recents.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = c.line.copy(alpha = 0.35f),
+                    thickness = 0.5.dp
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    L.t("RECENT DESTINATIONS"),
+                    color = c.sub,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+            items(recents) { p ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = androidx.compose.material3.ripple(),
+                            onClick = { onPick(p); engine.pickPlace(p) }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(38.dp).clip(RoundedCornerShape(14.dp)).background(c.tile),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.History, null, tint = c.sub, modifier = Modifier.size(20.dp))
+                    }
+                    Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                        Text(p.name, color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(p.sub, color = c.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (here != null) {
+                        val d = Geo.fmtDist(Geo.dist(here, p.pos), engine.imperial)
+                        Box(
+                            Modifier.clip(RoundedCornerShape(50)).background(c.tile).padding(horizontal = 9.dp, vertical = 4.dp)
+                        ) {
+                            Text(d, color = c.sub, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImmResults(engine: NavEngine, q: String, onPicked: () -> Unit) {
+    val c = LocalVw.current
+    val shape = RoundedCornerShape(24.dp)
+    val here = engine.fix?.pos
+    val chainN = remember(engine.results, q) { if (q.trim().length >= 2) engine.chainCount(q.trim()) else 0 }
+    LazyColumn(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 480.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.16f),
+                spotColor = Color.Black.copy(alpha = 0.22f)
+            )
+            .clip(shape)
+            .background(c.panel)
+            .padding(vertical = 6.dp)
+    ) {
+        if (chainN >= 2) item { SeeAllRow(engine, q.trim(), chainN) { onPicked() } }
+        itemsIndexed(engine.results) { idx, p ->
+            if (idx > 0 || chainN >= 2) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 72.dp, end = 16.dp),
+                    color = c.line.copy(alpha = 0.35f),
+                    thickness = 0.5.dp
+                )
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = androidx.compose.material3.ripple(),
+                        onClick = { onPicked(); engine.pickPlace(p) }
+                    )
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ExpressivePlaceIcon(p, 42.dp)
                 Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                    Text(p.name, color = c.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(p.name, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(p.sub, color = c.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                if (here != null) Text(Geo.fmtDist(Geo.dist(here, p.pos), engine.imperial), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
+                if (here != null) {
+                    val d = Geo.fmtDist(Geo.dist(here, p.pos), engine.imperial)
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(c.tile)
+                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Text(d, color = c.sub, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
     }
