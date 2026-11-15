@@ -24,8 +24,91 @@ data class Vw(
     val mapTint: Color = Color.Transparent,
 )
 
-val DarkVw = Vw(true, Color(0xFF08090B), Color(0xFF232326), Color(0xFF303034), Color(0xFFF4F5F7), Color(0xFF9A9AA3), Color(0xFF3FA9F5), Color(0xFF3C3C41), Color(0xFF2A2A2D), Color(0xFF151517))
-val LightVw = Vw(false, Color(0xFFB0B8C8), Color(0xFFE6E9F0), Color(0xFFD9DDE7), Color(0xFF14171C), Color(0xFF59616D), Color(0xFF0B79D0), Color(0xFFBCC2CB), Color(0xFFD9DDE3), Color(0xFFE8EBEF))
+val DarkVw = Vw(
+    dark = true,
+    bg = Color(0xFF101418),
+    surface = Color(0xFF1C2024),
+    surface2 = Color(0xFF272A2F),
+    text = Color(0xFFE1E2E8),
+    sub = Color(0xFFC3C7D0),
+    accent = Color(0xFF9ECAFF),
+    line = Color(0xFF43474E),
+    panel = Color(0xFF181C20),
+    tile = Color(0xFF32353A)
+)
+
+val LightVw = Vw(
+    dark = false,
+    bg = Color(0xFFF7F9FF),
+    surface = Color(0xFFEBEFF5),
+    surface2 = Color(0xFFE5E9EF),
+    text = Color(0xFF181C20),
+    sub = Color(0xFF43474E),
+    accent = Color(0xFF0061A4),
+    line = Color(0xFFC3C7D0),
+    panel = Color(0xFFF1F4FA),
+    tile = Color(0xFFDFE3E9)
+)
+
+val ExpressiveShapes = androidx.compose.material3.Shapes(
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+    small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+    medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+    large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+)
+
+val Md3DarkExpressive = darkColorScheme(
+    primary = Color(0xFF9ECAFF),
+    onPrimary = Color(0xFF003258),
+    primaryContainer = Color(0xFF00497D),
+    onPrimaryContainer = Color(0xFFD1E4FF),
+    secondary = Color(0xFFBDC7DC),
+    onSecondary = Color(0xFF273141),
+    secondaryContainer = Color(0xFF3E4758),
+    onSecondaryContainer = Color(0xFFD9E3F9),
+    tertiary = Color(0xFFFFB784),
+    onTertiary = Color(0xFF4F2500),
+    background = Color(0xFF101418),
+    onBackground = Color(0xFFE1E2E8),
+    surface = Color(0xFF101418),
+    onSurface = Color(0xFFE1E2E8),
+    surfaceVariant = Color(0xFF43474E),
+    onSurfaceVariant = Color(0xFFC3C7D0),
+    surfaceContainerLowest = Color(0xFF0B0E12),
+    surfaceContainerLow = Color(0xFF181C20),
+    surfaceContainer = Color(0xFF1C2024),
+    surfaceContainerHigh = Color(0xFF272A2F),
+    surfaceContainerHighest = Color(0xFF32353A),
+    outline = Color(0xFF8D9199),
+    outlineVariant = Color(0xFF43474E),
+)
+
+val Md3LightExpressive = lightColorScheme(
+    primary = Color(0xFF0061A4),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFD1E4FF),
+    onPrimaryContainer = Color(0xFF001D36),
+    secondary = Color(0xFF535F70),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFD7E3F7),
+    onSecondaryContainer = Color(0xFF101C2B),
+    tertiary = Color(0xFF8B5000),
+    onTertiary = Color(0xFFFFFFFF),
+    background = Color(0xFFF7F9FF),
+    onBackground = Color(0xFF181C20),
+    surface = Color(0xFFF7F9FF),
+    onSurface = Color(0xFF181C20),
+    surfaceVariant = Color(0xFFDFE2EB),
+    onSurfaceVariant = Color(0xFF43474E),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF1F4FA),
+    surfaceContainer = Color(0xFFEBEFF5),
+    surfaceContainerHigh = Color(0xFFE5E9EF),
+    surfaceContainerHighest = Color(0xFFDFE3E9),
+    outline = Color(0xFF73777F),
+    outlineVariant = Color(0xFFC3C7D0),
+)
 
 val LocalVw = staticCompositionLocalOf { DarkVw }
 
@@ -145,22 +228,48 @@ object NightWatch {
 
 @Composable
 fun VwTheme(dark: Boolean, content: @Composable () -> Unit) {
-    var v = if (dark) DarkVw else LightVw
-    // text that sits directly on the background always takes whichever of white or near-black reads best
-    run {
-        fun cr(a: Color, b: Color): Float {
-            val la = a.luminance() + 0.05f; val lb = b.luminance() + 0.05f
-            return kotlin.math.max(la, lb) / kotlin.math.min(la, lb)
-        }
-        val white = Color(0xFFFFFFFF); val black = Color(0xFF0B0D10)
-        val on = if (cr(white, v.bg) >= cr(black, v.bg)) white else black
-        var sub = androidx.compose.ui.graphics.lerp(on, v.bg, 0.22f)
-        if (cr(sub, v.bg) < 4.5f) sub = on
-        v = v.copy(onBg = on, onBgSub = sub)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val supportsDynamic = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+    val useDynamic = supportsDynamic && try {
+        com.headunit.launcher.Prefs(ctx.applicationContext).b("dynamic_color", true)
+    } catch (_: Throwable) {
+        true
     }
-    val scheme = if (dark) darkColorScheme(primary = v.accent, background = v.bg, surface = v.surface, onSurface = v.text, onBackground = v.text)
-    else lightColorScheme(primary = v.accent, background = v.bg, surface = v.surface, onSurface = v.text, onBackground = v.text)
-    CompositionLocalProvider(LocalVw provides v) { MaterialTheme(colorScheme = scheme, content = content) }
+
+    val scheme = if (useDynamic) {
+        try {
+            if (dark) androidx.compose.material3.dynamicDarkColorScheme(ctx)
+            else androidx.compose.material3.dynamicLightColorScheme(ctx)
+        } catch (_: Throwable) {
+            if (dark) Md3DarkExpressive else Md3LightExpressive
+        }
+    } else {
+        if (dark) Md3DarkExpressive else Md3LightExpressive
+    }
+
+    val baseVw = if (dark) DarkVw else LightVw
+    val v = baseVw.copy(
+        dark = dark,
+        bg = scheme.background,
+        surface = scheme.surfaceContainer,
+        surface2 = scheme.surfaceContainerHigh,
+        text = scheme.onSurface,
+        sub = scheme.onSurfaceVariant,
+        accent = scheme.primary,
+        line = scheme.outlineVariant,
+        panel = scheme.surfaceContainerLow,
+        tile = scheme.surfaceContainerHighest,
+        onBg = scheme.onBackground,
+        onBgSub = scheme.onSurfaceVariant
+    )
+
+    CompositionLocalProvider(LocalVw provides v) {
+        MaterialTheme(
+            colorScheme = scheme,
+            shapes = ExpressiveShapes,
+            content = content
+        )
+    }
 }
 
 val NavBlue = Color(0xFF4DA3FF)

@@ -63,34 +63,59 @@ import com.headunit.launcher.MapBinding
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Click with a small press-in scale, so buttons feel responsive. Put it first in the chain to scale the whole button. */
+/** Click with a fluid spring press scale and native Material 3 ripple. */
 fun Modifier.pressClick(onClick: () -> Unit): Modifier = this.composed {
     val src = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val s by androidx.compose.animation.core.animateFloatAsState(if (pressed) 0.93f else 1f, androidx.compose.animation.core.tween(90), label = "press")
+    val s by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "press"
+    )
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    this.graphicsLayer { scaleX = s; scaleY = s }.clickable(interactionSource = src, indication = null, onClick = {
-        try { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-        onClick()
-    })
+    this.graphicsLayer { scaleX = s; scaleY = s }.clickable(
+        interactionSource = src,
+        indication = androidx.compose.material3.ripple(),
+        onClick = {
+            try { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+            onClick()
+        }
+    )
 }
 
+/** Expressive Material 3 elevated card with soft tonal shadow and generous 26dp rounded corners. */
 @Composable
 fun VCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable BoxScope.() -> Unit) {
     val c = LocalVw.current
+    val shape = RoundedCornerShape(26.dp)
     Box(
         modifier
-            .clip(RoundedCornerShape(32.dp))
-            .background(c.panel)
-            .border(1.dp, c.line.copy(alpha = 0.07f), RoundedCornerShape(32.dp))
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .shadow(
+                elevation = 4.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.22f),
+                spotColor = Color.Black.copy(alpha = 0.28f)
+            )
+            .clip(shape)
+            .background(c.surface)
+            .then(
+                if (onClick != null) Modifier.clickable(
+                    interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = androidx.compose.material3.ripple(),
+                    onClick = onClick
+                ) else Modifier
+            ),
         content = content,
     )
 }
 
-/** Flat inset tile for rows that sit on a VCard, same as the menu tiles. */
+/** Flat inset tile for rows that sit on a VCard, using M3 surfaceContainerHighest. */
 @Composable
-fun Modifier.inset(radius: androidx.compose.ui.unit.Dp = 20.dp, tint: Color? = null): Modifier {
+fun Modifier.inset(radius: androidx.compose.ui.unit.Dp = 18.dp, tint: Color? = null): Modifier {
     val c = LocalVw.current
     val shape = RoundedCornerShape(radius)
     return this.clip(shape).background(if (tint != null) tint.copy(alpha = 0.16f) else c.tile)
@@ -101,47 +126,56 @@ fun Modifier.inset(radius: androidx.compose.ui.unit.Dp = 20.dp, tint: Color? = n
 fun SectionLabel(text: String, modifier: Modifier = Modifier, trailing: String? = null) {
     val c = LocalVw.current
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(text.uppercase(), color = c.sub, fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.3.sp, modifier = Modifier.weight(1f, fill = trailing != null))
+        Text(text.uppercase(), color = c.sub, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp, modifier = Modifier.weight(1f, fill = trailing != null))
         if (trailing != null) Text(trailing, color = c.sub, fontSize = 12.sp)
     }
 }
 
-/** Dark rounded tile holding a coloured glyph, like the menu tiles. */
+/** Material 3 Expressive squircle tile holding a coloured glyph. */
 @Composable
-fun IconBadge(icon: ImageVector, tint: Color, modifier: Modifier = Modifier, size: Dp = 40.dp) {
+fun IconBadge(icon: ImageVector, tint: Color, modifier: Modifier = Modifier, size: Dp = 42.dp) {
     val c = LocalVw.current
-    val wash = if (tint == c.text) c.tile else androidx.compose.ui.graphics.lerp(c.tile, tint, if (c.dark) 0.18f else 0.16f)
+    val wash = if (tint == c.text) c.tile else androidx.compose.ui.graphics.lerp(c.tile, tint, if (c.dark) 0.22f else 0.18f)
     Box(
-        modifier.size(size).clip(RoundedCornerShape(size * 0.34f)).background(wash),
+        modifier.size(size).clip(RoundedCornerShape(14.dp)).background(wash),
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, null, tint = tint, modifier = Modifier.size(size * 0.55f)) }
+    ) { Icon(icon, null, tint = tint, modifier = Modifier.size(size * 0.52f)) }
 }
 
-/** Page title: big headline with an optional subtitle. */
+/** Page title: big headline with an optional subtitle using M3 typography scale. */
 @Composable
 fun PageTitle(title: String, subtitle: String? = null, modifier: Modifier = Modifier) {
     val c = LocalVw.current
     Column(modifier) {
-        Text(title, color = c.onBg, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
+        Text(title, color = c.onBg, fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)
         if (subtitle != null) Text(subtitle, color = c.onBgSub, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
+/** Material 3 Expressive Floating Action Button (squircle with subtle elevation and spring physics). */
 @Composable
 fun RoundBtn(
     icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier,
-    active: Boolean = false, size: Dp = 50.dp, tint: Color? = null,
+    active: Boolean = false, size: Dp = 52.dp, tint: Color? = null,
 ) {
     val c = LocalVw.current
+    val shape = RoundedCornerShape(18.dp)
     Box(
         modifier
+            .shadow(
+                elevation = if (active) 4.dp else 2.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.20f),
+                spotColor = Color.Black.copy(alpha = 0.25f)
+            )
             .pressClick(onClick)
             .size(size)
-            .clip(CircleShape)
-            .background(if (active) c.accent else c.surface.copy(alpha = 0.94f)),
+            .clip(shape)
+            .background(if (active) c.accent else c.surface),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = tint ?: if (active) Color.White else c.text, modifier = Modifier.size(size * 0.5f))
+        Icon(icon, null, tint = tint ?: if (active) Color.White else c.text, modifier = Modifier.size(size * 0.48f))
     }
 }
 
@@ -180,14 +214,29 @@ fun Pill(
 ) {
     val c = LocalVw.current
     val sel = selectedColor ?: c.accent
-    val bg by androidx.compose.animation.animateColorAsState(if (selected) sel else c.tile, androidx.compose.animation.core.tween(160), label = "pill")
+    val bg by androidx.compose.animation.animateColorAsState(
+        targetValue = if (selected) sel else c.tile,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "pill"
+    )
     val fg = if (selected) (if (sel.luminance() > 0.6f) Color(0xFF14171C) else Color.White) else c.text
+    val shape = RoundedCornerShape(50)
     Box(
         modifier
+            .shadow(
+                elevation = if (selected) 2.dp else 0.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.15f),
+                spotColor = Color.Black.copy(alpha = 0.20f)
+            )
             .pressClick(onClick)
-            .clip(RoundedCornerShape(50))
+            .clip(shape)
             .background(bg)
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
+            .padding(horizontal = 20.dp, vertical = 11.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(text, color = fg, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium, letterSpacing = 0.1.sp)
@@ -357,12 +406,21 @@ fun rememberVoiceInput(prompt: String, onResult: (String) -> Unit): () -> Unit {
     }
 }
 
-/** The shared floating-card look: soft shadow, solid surface and a hairline outline. */
+/** Material 3 Expressive floating card: clean tonal container with soft drop shadow. */
 @Composable
-fun Modifier.floating(radius: Dp = 24.dp): Modifier {
+fun Modifier.floating(radius: Dp = 26.dp): Modifier {
     val c = LocalVw.current
     val shape = RoundedCornerShape(radius)
-    return (if (c.surface.alpha >= 0.99f) this.shadow(6.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f)) else this).clip(shape).background(c.surface).border(1.dp, if (c.surface.alpha < 0.9f) c.line else c.line.copy(alpha = 0.07f), shape)
+    return this
+        .shadow(
+            elevation = 5.dp,
+            shape = shape,
+            clip = false,
+            ambientColor = Color.Black.copy(alpha = 0.20f),
+            spotColor = Color.Black.copy(alpha = 0.28f)
+        )
+        .clip(shape)
+        .background(c.surface)
 }
 
 /**
