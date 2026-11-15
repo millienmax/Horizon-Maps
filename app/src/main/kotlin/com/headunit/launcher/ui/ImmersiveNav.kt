@@ -17,6 +17,7 @@ import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -59,6 +60,10 @@ import androidx.compose.material.icons.rounded.Flight
 import androidx.compose.material.icons.rounded.Hotel
 import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.BrightnessAuto
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -678,6 +683,90 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
     }
 }
 
+private data class ButtonGroupItem(
+    val icon: ImageVector,
+    val label: String,
+)
+
+/** MD3 Expressive connected button group with dynamic corner morphing and tonal fill. */
+@Composable
+private fun ExpressiveConnectedButtonGroup(
+    items: List<ButtonGroupItem>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = LocalVw.current
+    val count = items.size
+    Row(
+        modifier = modifier.fillMaxWidth().height(44.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items.forEachIndexed { i, item ->
+            val isSel = i == selectedIndex
+            val startCorner by animateDpAsState(
+                targetValue = if (isSel || i == 0) 22.dp else 6.dp,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+            )
+            val endCorner by animateDpAsState(
+                targetValue = if (isSel || i == count - 1) 22.dp else 6.dp,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+            )
+            val shape = RoundedCornerShape(
+                topStart = startCorner,
+                bottomStart = startCorner,
+                topEnd = endCorner,
+                bottomEnd = endCorner
+            )
+
+            val bgColor by animateColorAsState(
+                targetValue = if (isSel) c.accent else c.tile,
+                animationSpec = tween(200)
+            )
+            val contentColor by animateColorAsState(
+                targetValue = if (isSel) Color.White else c.text,
+                animationSpec = tween(200)
+            )
+
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(shape)
+                    .background(bgColor)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = androidx.compose.material3.ripple(),
+                        onClick = { onSelect(i) }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 6.dp)
+                ) {
+                    Icon(
+                        item.icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        item.label,
+                        color = contentColor,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
 /**
  * Map options: the map's look first (Standard or Satellite, Auto / Day / Night), then what's shown on it as tiles that light up when
  * on, then the trip tools, reports and things to find. In landscape on a wide screen it's twice as wide, in two columns, so nothing
@@ -749,14 +838,29 @@ private fun OptionsSheet(
                 SheetHeading(L.t("Appearance & view"))
                 val theme = p.s(PreferenceKeys.THEME, "auto")
                 val seg = when (theme) { "day" -> 1; "night" -> 2; else -> 0 }
-                Segments(listOf(L.t("Auto"), L.t("Day"), L.t("Night")), seg) { i -> if (i != seg) p.put(PreferenceKeys.THEME, listOf("auto", "day", "night")[i]) }
-                Segments(listOf("2D", "3D"), if (engine.tilt3d) 1 else 0) { i -> if ((i == 1) != engine.tilt3d) engine.toggleTilt() }
+                ExpressiveConnectedButtonGroup(
+                    items = listOf(
+                        ButtonGroupItem(Icons.Rounded.BrightnessAuto, L.t("Auto")),
+                        ButtonGroupItem(Icons.Rounded.LightMode, L.t("Day")),
+                        ButtonGroupItem(Icons.Rounded.DarkMode, L.t("Night")),
+                    ),
+                    selectedIndex = seg,
+                    onSelect = { i -> if (i != seg) p.put(PreferenceKeys.THEME, listOf("auto", "day", "night")[i]) }
+                )
+                ExpressiveConnectedButtonGroup(
+                    items = listOf(
+                        ButtonGroupItem(Icons.Rounded.Layers, "2D"),
+                        ButtonGroupItem(Icons.Rounded.ViewInAr, "3D"),
+                    ),
+                    selectedIndex = if (engine.tilt3d) 1 else 0,
+                    onSelect = { i -> if ((i == 1) != engine.tilt3d) engine.toggleTilt() }
+                )
 
                 fun tog(key: String, def: Boolean): Pair<Boolean, () -> Unit> { val on = p.b(key, def); return on to { p.put(key, !on) } }
 
                 SheetHeading(L.t("Map details"))
                 val details = listOf(
-                    Triple(Icons.Rounded.Traffic, L.t("Traffic"), tog(PreferenceKeys.TRAFFIC, true)),
+                    Triple(Icons.Rounded.DirectionsCar, L.t("Traffic"), tog(PreferenceKeys.TRAFFIC, true)),
                     Triple(Icons.Rounded.CameraAlt, L.t("Cameras"), tog(PreferenceKeys.HAZARD_ICONS, true)),
                     Triple(Icons.Rounded.Traffic, L.t("Traffic lights"), tog(PreferenceKeys.SIGNALS, true)),
                 )
