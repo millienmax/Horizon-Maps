@@ -189,9 +189,21 @@ private fun ImmCircle(
     val c = LocalVw.current
     val shape = RoundedCornerShape(18.dp)
     Box(
-        if (LocalInRail.current) Modifier.size(size).pressClick(onLongClick, onClick).padding(4.dp).clip(RoundedCornerShape(14.dp)).background(if (active) c.accent else Color.Transparent)
-        else Modifier.size(size).panel(5.dp, shape, if (active) c.accent else c.surface).pressClick(onLongClick, onClick),
-        contentAlignment = Alignment.Center, content = content,
+        if (LocalInRail.current) {
+            Modifier
+                .size(size)
+                .padding(4.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (active) c.accent else Color.Transparent)
+                .pressClick(onLongClick, onClick)
+        } else {
+            Modifier
+                .size(size)
+                .panel(5.dp, shape, if (active) c.accent else c.surface)
+                .pressClick(onLongClick, onClick)
+        },
+        contentAlignment = Alignment.Center,
+        content = content,
     )
 }
 
@@ -445,9 +457,19 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         // ---- right side: the map buttons grouped in one panel at the top, zoom under it, and Settings beside it
         if (!previewing && !searchActive) {
             val buttonBaseDensity = LocalDensity.current
-            // just two buttons on the map: the compass and map options. 3D / 2D and sound are at the top of map options, voice and sound
-            // are on the trip card while navigating, Settings is beside these when you're not (and in map options' header when you are)
+            val showSettings = !routing
+            // MD3 Expressive Connected Button Group: Settings (when cruising), Compass, Layers, Sound
             val railItems = ArrayList<@Composable () -> Unit>()
+            if (showSettings) {
+                railItems.add(@Composable {
+                    ImmIcon(
+                        Icons.Rounded.Settings,
+                        onClick = { sheet = false; soundSheet = false; onSettings() },
+                        active = false,
+                        desc = L.t("Settings")
+                    )
+                })
+            }
             railItems.add(@Composable { ImmCompass(engine) })
             railItems.add(@Composable { ImmIcon(Icons.Rounded.Layers, { sheet = !sheet; if (sheet) soundSheet = false }, active = sheet, desc = L.t("Map options")) })
             // Quick sound control (always visible): tap cycles All/Alerts/Mute, long-press opens sound sheet
@@ -482,26 +504,30 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             val spNow = engine.fix?.speed ?: 0.0
             androidx.compose.runtime.SideEffect { if (spNow > 3.0) stopped = false else if (spNow < 1.0) stopped = true }
             val showZoom = stopped || !engine.following || kotlin.math.abs(engine.zoomOffset) > 0.01
-            val showSettings = !routing
             val unit = 52.dp * mainButtonScale
             // the top of the speedometer (measured; a fair guess until it has been laid out)
-            // (only in the way at the bottom: in the middle or at the top it sits beside the buttons instead)
             val speedTop = if (speedPos != "bottom") maxHeight else if (speedTopPx >= 0) with(dens) { speedTopPx.toDp() } else maxHeight - 190.dp
-            // landscape: Settings sits to the left of the panel (to the right when mirrored) so the panel starts at the very top, with
-            // zoom straight under it. Portrait: Settings above the panel, as there's no room beside it next to the search bar.
-            val settingsAbove = narrow && showSettings
-            val top = 16.dp * mainButtonScale + (if (settingsAbove) unit + 10.dp * mainButtonScale else 0.dp)
-            // (with zoom hidden there's nothing to fit under the panel)
+            val top = 16.dp * mainButtonScale
             val zoomH = (2 * 52 + 1).dp * mainButtonScale
-            // zoom goes under the panel unless that would touch the speedometer; then it moves beside the panel, and on a really short
-            // screen the panel splits into two columns rather than run into the speedometer
             val railH = unit * railItems.size
             val zoomUnder = narrow || top + railH + 10.dp * mainButtonScale + zoomH + 8.dp <= speedTop
             val perCol = ((speedTop - top - 8.dp) / unit).toInt().coerceAtLeast(3)
             val chunks = if (narrow || railItems.size <= perCol) listOf(railItems.toList()) else railItems.chunked(perCol)
             CompositionLocalProvider(LocalDensity provides Density(buttonBaseDensity.density * mainButtonScale, buttonBaseDensity.fontScale)) {
                 val rail: @Composable (List<@Composable () -> Unit>) -> Unit = { part ->
-                    Column(Modifier.panel(6.dp, RoundedCornerShape(26.dp), c.surface), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        Modifier
+                            .shadow(
+                                elevation = 4.dp,
+                                shape = RoundedCornerShape(26.dp),
+                                ambientColor = Color.Black.copy(alpha = 0.12f),
+                                spotColor = Color.Black.copy(alpha = 0.18f)
+                            )
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(c.surface)
+                            .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(26.dp)),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         CompositionLocalProvider(LocalInRail provides true) {
                             part.forEachIndexed { idx, item ->
                                 if (idx > 0) Box(Modifier.width(26.dp).height(1.dp).background(c.line.copy(alpha = 0.5f)))
@@ -512,14 +538,45 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                 }
                 val zoom: @Composable () -> Unit = {
                     AnimatedVisibility(showZoom, enter = fadeIn(tween(200)) + androidx.compose.animation.expandVertically(tween(220)), exit = fadeOut(tween(250)) + androidx.compose.animation.shrinkVertically(tween(260))) {
-                        Column(Modifier.panel(6.dp, RoundedCornerShape(26.dp), c.surface), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.size(52.dp).pressClick { engine.zoom(1.0) }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, L.t("Zoom in"), tint = c.text, modifier = Modifier.size(26.dp)) }
-                            Box(Modifier.width(26.dp).height(1.dp).background(c.line.copy(alpha = 0.5f)))
-                            Box(Modifier.size(52.dp).pressClick { engine.zoom(-1.0) }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Remove, L.t("Zoom out"), tint = c.text, modifier = Modifier.size(26.dp)) }
+                        Column(
+                            Modifier
+                                .shadow(
+                                    elevation = 4.dp,
+                                    shape = RoundedCornerShape(26.dp),
+                                    ambientColor = Color.Black.copy(alpha = 0.12f),
+                                    spotColor = Color.Black.copy(alpha = 0.18f)
+                                )
+                                .clip(RoundedCornerShape(26.dp))
+                                .background(c.surface)
+                                .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(26.dp)),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CompositionLocalProvider(LocalInRail provides true) {
+                                Box(
+                                    Modifier
+                                        .size(52.dp)
+                                        .padding(4.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .pressClick { engine.zoom(1.0) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Rounded.Add, L.t("Zoom in"), tint = c.text, modifier = Modifier.size(24.dp))
+                                }
+                                Box(Modifier.width(26.dp).height(1.dp).background(c.line.copy(alpha = 0.5f)))
+                                Box(
+                                    Modifier
+                                        .size(52.dp)
+                                        .padding(4.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .pressClick { engine.zoom(-1.0) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Rounded.Remove, L.t("Zoom out"), tint = c.text, modifier = Modifier.size(24.dp))
+                                }
+                            }
                         }
                     }
                 }
-                val settings: @Composable () -> Unit = { if (showSettings) ImmIcon(Icons.Rounded.Settings, { sheet = false; soundSheet = false; onSettings() }, desc = L.t("Settings")) }
                 // the panel against the screen edge with zoom under it (or beside it), in as many columns as it needs
                 val panelAndZoom: @Composable () -> Unit = {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
@@ -534,12 +591,13 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                         if (!zoomUnder && mir) zoom()
                     }
                 }
-                // (its outline goes to the camera too, so with no route your arrow sits in the middle of the clear map)
-                if (settingsAbove) Column(Modifier.align(side(Alignment.TopEnd)).padding(16.dp).onGloballyPositioned { report(2, it.boundsInParent()); buttonsWPx = it.size.width }, verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = if (mir) Alignment.Start else Alignment.End) {
-                    settings(); panelAndZoom()
-                }
-                else Row(Modifier.align(side(Alignment.TopEnd)).padding(16.dp).onGloballyPositioned { report(2, it.boundsInParent()); buttonsWPx = it.size.width }, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-                    if (mir) { panelAndZoom(); settings() } else { settings(); panelAndZoom() }
+                Box(
+                    Modifier
+                        .align(side(Alignment.TopEnd))
+                        .padding(16.dp)
+                        .onGloballyPositioned { report(2, it.boundsInParent()); buttonsWPx = it.size.width }
+                ) {
+                    panelAndZoom()
                 }
             }
         } else androidx.compose.runtime.SideEffect { engine.setPanel(2, 0f, 0f, 0f, 0f); if (buttonsWPx != 0) buttonsWPx = 0 }
@@ -1448,10 +1506,7 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
 @Composable
 private fun ImmCompass(engine: NavEngine) {
     val c = LocalVw.current
-    Box(
-        (if (LocalInRail.current) Modifier.size(52.dp) else Modifier.size(52.dp).panel(6.dp, CircleShape, c.surface)).pressClick { engine.toggleNorthUp() },
-        contentAlignment = Alignment.Center,
-    ) {
+    ImmCircle(onClick = { engine.toggleNorthUp() }, size = 52.dp, active = false) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(width = 4.dp, height = 8.dp).clip(RoundedCornerShape(2.dp)).background(Bad))
             Text("N", color = if (engine.northUp) c.accent else c.text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -2195,37 +2250,32 @@ private fun ExpressiveNavChip(
     modifier: Modifier = Modifier
 ) {
     val c = LocalVw.current
-    val shape = RoundedCornerShape(16.dp)
+    // MD3 Expressive Assist Chip: 8dp corner radius, 36dp height, subtle border, direct leading icon
+    val shape = RoundedCornerShape(8.dp)
     Row(
         modifier
+            .height(36.dp)
             .shadow(
-                elevation = 2.dp,
+                elevation = 1.dp,
                 shape = shape,
                 clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.10f),
-                spotColor = Color.Black.copy(alpha = 0.16f)
+                ambientColor = Color.Black.copy(alpha = 0.08f),
+                spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .clip(shape)
             .background(c.surface)
+            .border(1.dp, c.line.copy(alpha = 0.65f), shape)
             .pressClick(onClick)
-            .padding(start = 7.dp, end = 15.dp, top = 7.dp, bottom = 7.dp),
+            .padding(start = 10.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Box(
-            Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(tint.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
-        }
+        Icon(icon, null, tint = tint, modifier = Modifier.size(18.dp))
         Text(
             text = label,
             color = c.text,
-            fontSize = 14.5.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
             softWrap = false
         )
