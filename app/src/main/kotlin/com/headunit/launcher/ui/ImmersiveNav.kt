@@ -21,6 +21,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -56,6 +58,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.material.icons.rounded.Flight
 import androidx.compose.material.icons.rounded.Hotel
 import androidx.compose.material.icons.rounded.Storefront
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -643,17 +646,34 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             }
         }
 
-        // ---- the options sheet slides in from the right; tapping the map closes it
+        // ---- the options sheet slides in from the bottom on phones, and from the side on wide screens; tapping the scrim closes it
         if (sheet && !previewing) Box(
-            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.12f))
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { sheet = false },
         )
         AnimatedVisibility(
             visible = sheet && !previewing,
-            modifier = Modifier.align(side(Alignment.CenterEnd)),
-            enter = slideInHorizontally(initialOffsetX = { if (mir) -it else it }) + fadeIn(),
-            exit = slideOutHorizontally(targetOffsetX = { if (mir) -it else it }) + fadeOut(),
-        ) { OptionsSheet(engine, shareEta, wide = !narrow && maxWidth >= 860.dp && maxHeight < maxWidth, onSettings = { sheet = false; onSettings() }, voice = voice) { sheet = false } }
+            modifier = if (narrow) Modifier.align(Alignment.BottomCenter) else Modifier.align(side(Alignment.CenterEnd)),
+            enter = if (narrow) {
+                slideInVertically(initialOffsetY = { it }, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) + fadeIn()
+            } else {
+                slideInHorizontally(initialOffsetX = { if (mir) -it else it }) + fadeIn()
+            },
+            exit = if (narrow) {
+                slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            } else {
+                slideOutHorizontally(targetOffsetX = { if (mir) -it else it }) + fadeOut()
+            },
+        ) {
+            OptionsSheet(
+                engine = engine,
+                shareEta = shareEta,
+                narrow = narrow,
+                wide = !narrow && maxWidth >= 860.dp && maxHeight < maxWidth,
+                onSettings = { sheet = false; onSettings() },
+                voice = voice
+            ) { sheet = false }
+        }
         if (engine.stopsEditor) StopsDialog(engine, onClose = { engine.stopsEditor = false })
     }
 }
@@ -664,25 +684,61 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
  * needs scrolling; it still scrolls if a small screen needs it.
  */
 @Composable
-private fun OptionsSheet(engine: NavEngine, shareEta: () -> Unit, wide: Boolean = false, onSettings: () -> Unit = {}, voice: () -> Unit = {}, close: () -> Unit) { TextSides {
+private fun OptionsSheet(
+    engine: NavEngine,
+    shareEta: () -> Unit,
+    narrow: Boolean = false,
+    wide: Boolean = false,
+    onSettings: () -> Unit = {},
+    voice: () -> Unit = {},
+    close: () -> Unit
+) { TextSides {
     val c = LocalVw.current
     val p = engine.prefs
     val routing = engine.route != null && !engine.previewing
-    val shape = RoundedCornerShape(28.dp)
+    val shape = if (narrow) RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) else RoundedCornerShape(28.dp)
     Column(
-        Modifier.fillMaxHeight().widthIn(max = if (wide) 760.dp else 410.dp).fillMaxWidth().padding(10.dp).shadow(16.dp, shape).clip(shape).background(c.panel)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-            .verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier
+            .then(
+                if (narrow) Modifier.fillMaxWidth().heightIn(max = 620.dp)
+                else Modifier.fillMaxHeight().widthIn(max = if (wide) 760.dp else 410.dp).fillMaxWidth().padding(10.dp)
+            )
+            .shadow(if (narrow) 24.dp else 16.dp, shape)
+            .clip(shape)
+            .background(c.panel)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(L.t("Map options"), color = c.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        if (narrow) {
+            Box(
+                Modifier
+                    .padding(top = 10.dp, bottom = 4.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .width(38.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(c.sub.copy(alpha = 0.35f))
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = if (narrow) 6.dp else 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(L.t("Map options"), color = c.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             ImmIcon(Icons.Rounded.Settings, onSettings, size = 42.dp, desc = L.t("Settings"))
             Spacer(Modifier.width(8.dp))
             ImmIcon(Icons.Rounded.Close, close, size = 42.dp, desc = L.t("Close"))
         }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
         val mapPart: @Composable () -> Unit = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // quick rows: the view and the sound (they were round buttons on the map)
                 SheetHeading(L.t("View"))
                 Segments(listOf("2D", "3D"), if (engine.tilt3d) 1 else 0) { i -> if ((i == 1) != engine.tilt3d) engine.toggleTilt() }
@@ -691,7 +747,7 @@ private fun OptionsSheet(engine: NavEngine, shareEta: () -> Unit, wide: Boolean 
                 SheetHeading(L.t("Map"))
                 // the map's look: two picture cards, then day and night
                 val sat = p.b(PreferenceKeys.SATELLITE, false)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     LookCard(Modifier.weight(1f), L.t("Standard"), false, !sat) { p.put(PreferenceKeys.SATELLITE, false) }
                     LookCard(Modifier.weight(1f), L.t("Satellite"), true, sat) { p.put(PreferenceKeys.SATELLITE, true) }
                 }
@@ -713,14 +769,14 @@ private fun OptionsSheet(engine: NavEngine, shareEta: () -> Unit, wide: Boolean 
                     Triple(Icons.Rounded.WaterDrop, L.t("Rain radar"), tog(PreferenceKeys.RAIN_RADAR, false)),
                     Triple(Icons.Rounded.AcUnit, L.t("Weather"), tog(PreferenceKeys.RAIN_EFFECTS, false)),
                 )
-                for (row in layers.chunked(3)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (row in layers.chunked(3)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     for ((icon, label, st) in row) ToggleTile(Modifier.weight(1f), icon, label, st.first, st.second)
                     repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
         val tripPart: @Composable () -> Unit = {
-            if (routing) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (routing) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SheetHeading(L.t("This trip"))
                 WideTiles(5, listOf(
                     TileSpec(Icons.Rounded.Mic, L.t("Voice"), c.accent, { close(); voice() }),
@@ -732,7 +788,7 @@ private fun OptionsSheet(engine: NavEngine, shareEta: () -> Unit, wide: Boolean 
             }
         }
         val restPart: @Composable () -> Unit = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SheetHeading(L.t("Report here"))
                 WideTiles(5, listOf(
                     TileSpec(Icons.Rounded.LocalPolice, L.t("Police"), Color(0xFF1E66F5), { engine.report("police"); close() }),
@@ -759,10 +815,11 @@ private fun OptionsSheet(engine: NavEngine, shareEta: () -> Unit, wide: Boolean 
         }
         if (wide) Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             Box(Modifier.weight(1f)) { mapPart() }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) { tripPart(); restPart() }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { tripPart(); restPart() }
         } else {
             // while navigating the trip tools come first; otherwise the map
             tripPart(); mapPart(); restPart()
+        }
         }
     }
 } }
@@ -771,11 +828,36 @@ private fun OptionsSheet(engine: NavEngine, shareEta: () -> Unit, wide: Boolean 
 @Composable
 private fun Segments(labels: List<String>, selected: Int, onPick: (Int) -> Unit) {
     val c = LocalVw.current
-    Row(Modifier.fillMaxWidth().height(42.dp).clip(RoundedCornerShape(14.dp)).background(c.tile).padding(3.dp)) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(c.tile)
+            .padding(4.dp)
+    ) {
         for ((i, label) in labels.withIndex()) {
-            Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(11.dp)).background(if (i == selected) c.accent else Color.Transparent)
-                .clickable { onPick(i) }, contentAlignment = Alignment.Center) {
-                Text(label, color = if (i == selected) Color.White else c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            val isSel = i == selected
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (isSel) c.accent else Color.Transparent)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = androidx.compose.material3.ripple(),
+                        onClick = { onPick(i) }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    label,
+                    color = if (isSel) Color.White else c.text,
+                    fontSize = 14.sp,
+                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -787,25 +869,60 @@ private fun soundIcon(mode: Int): ImageVector = when (mode) { 0 -> Icons.Rounded
 @Composable
 private fun LookCard(modifier: Modifier, label: String, satellite: Boolean, selected: Boolean, onClick: () -> Unit) {
     val c = LocalVw.current
-    val shape = RoundedCornerShape(16.dp)
-    Column(modifier.clip(shape).background(if (selected) c.accent.copy(alpha = 0.18f) else c.tile)
-        .border(if (selected) 2.dp else 0.dp, if (selected) c.accent else Color.Transparent, shape).pressClick(onClick)) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(54.dp)) {
-            val w = size.width; val h = size.height
-            if (satellite) {
-                drawRect(Color(0xFF3E5A35))
-                drawRect(Color(0xFF6B7F4A), topLeft = Offset(w * 0.08f, h * 0.12f), size = androidx.compose.ui.geometry.Size(w * 0.3f, h * 0.38f))
-                drawRect(Color(0xFF7C6A4E), topLeft = Offset(w * 0.55f, h * 0.55f), size = androidx.compose.ui.geometry.Size(w * 0.35f, h * 0.3f))
-                drawLine(Color(0xFFBDB6A6), Offset(0f, h * 0.72f), Offset(w, h * 0.38f), strokeWidth = h * 0.08f)
-            } else {
-                drawRect(if (c.dark) Color(0xFF2A3348) else Color(0xFFE9EDF3))
-                val road = if (c.dark) Color(0xFF55607A) else Color.White
-                drawLine(road, Offset(0f, h * 0.65f), Offset(w, h * 0.35f), strokeWidth = h * 0.1f)
-                drawLine(road, Offset(w * 0.35f, 0f), Offset(w * 0.5f, h), strokeWidth = h * 0.07f)
-                drawRect(if (c.dark) Color(0xFF2E4A3A) else Color(0xFFCDE8D2), topLeft = Offset(w * 0.62f, h * 0.6f), size = androidx.compose.ui.geometry.Size(w * 0.28f, h * 0.3f))
+    val thumbShape = RoundedCornerShape(18.dp)
+    Column(
+        modifier.pressClick(onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(68.dp)
+                .shadow(if (selected) 4.dp else 1.dp, thumbShape)
+                .clip(thumbShape)
+                .border(
+                    width = if (selected) 2.5.dp else 1.dp,
+                    color = if (selected) c.accent else c.sub.copy(alpha = 0.2f),
+                    shape = thumbShape
+                )
+        ) {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val w = size.width; val h = size.height
+                if (satellite) {
+                    drawRect(Color(0xFF3E5A35))
+                    drawRect(Color(0xFF6B7F4A), topLeft = Offset(w * 0.08f, h * 0.12f), size = androidx.compose.ui.geometry.Size(w * 0.3f, h * 0.38f))
+                    drawRect(Color(0xFF7C6A4E), topLeft = Offset(w * 0.55f, h * 0.55f), size = androidx.compose.ui.geometry.Size(w * 0.35f, h * 0.3f))
+                    drawLine(Color(0xFFBDB6A6), Offset(0f, h * 0.72f), Offset(w, h * 0.38f), strokeWidth = h * 0.08f)
+                } else {
+                    drawRect(if (c.dark) Color(0xFF2A3348) else Color(0xFFE9EDF3))
+                    val road = if (c.dark) Color(0xFF55607A) else Color.White
+                    drawLine(road, Offset(0f, h * 0.65f), Offset(w, h * 0.35f), strokeWidth = h * 0.1f)
+                    drawLine(road, Offset(w * 0.35f, 0f), Offset(w * 0.5f, h), strokeWidth = h * 0.07f)
+                    drawRect(if (c.dark) Color(0xFF2E4A3A) else Color(0xFFCDE8D2), topLeft = Offset(w * 0.62f, h * 0.6f), size = androidx.compose.ui.geometry.Size(w * 0.28f, h * 0.3f))
+                }
+            }
+            if (selected) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(c.accent),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                }
             }
         }
-        Text(label, color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        Text(
+            label,
+            color = if (selected) c.accent else c.text,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp)
+        )
     }
 }
 
@@ -813,12 +930,38 @@ private fun LookCard(modifier: Modifier, label: String, satellite: Boolean, sele
 @Composable
 private fun ToggleTile(modifier: Modifier, icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
     val c = LocalVw.current
-    val shape = RoundedCornerShape(16.dp)
-    Column(modifier.clip(shape).background(if (on) c.accent.copy(alpha = 0.2f) else c.tile)
-        .border(if (on) 1.5.dp else 0.dp, if (on) c.accent else Color.Transparent, shape).pressClick(onClick).padding(vertical = 10.dp, horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, if (on) "$label on" else "$label off", tint = if (on) c.accent else c.sub, modifier = Modifier.size(24.dp))
-        Text(label, color = if (on) c.text else c.sub, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        modifier
+            .clip(shape)
+            .background(if (on) c.accent.copy(alpha = 0.16f) else c.tile)
+            .pressClick(onClick)
+            .padding(vertical = 12.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (on) c.accent else Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                if (on) "$label on" else "$label off",
+                tint = if (on) Color.White else c.sub,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Text(
+            label,
+            color = if (on) c.text else c.sub,
+            fontSize = 12.sp,
+            fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp)
+        )
     }
 }
 
@@ -829,13 +972,32 @@ private fun WideTiles(cols: Int, tiles: List<TileSpec>, compact: Boolean = false
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (row in tiles.chunked(cols)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
             for (t in row) Column(
-                Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(c.tile).pressClick(t.onClick).padding(vertical = if (compact) 9.dp else 11.dp, horizontal = 2.dp),
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(c.tile)
+                    .pressClick(t.onClick)
+                    .padding(vertical = if (compact) 10.dp else 12.dp, horizontal = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Box(Modifier.size(if (compact) 32.dp else 38.dp).clip(CircleShape).background(t.tint.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                    Icon(t.icon, null, tint = t.tint, modifier = Modifier.size(if (compact) 19.dp else 22.dp))
+                Box(
+                    Modifier
+                        .size(if (compact) 34.dp else 40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(t.tint.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(t.icon, null, tint = t.tint, modifier = Modifier.size(if (compact) 20.dp else 24.dp))
                 }
-                Text(t.label, color = c.text, fontSize = if (compact) 11.sp else 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+                Text(
+                    t.label,
+                    color = c.text,
+                    fontSize = if (compact) 11.sp else 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
             repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
         }
