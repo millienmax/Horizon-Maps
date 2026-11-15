@@ -614,7 +614,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         // ---- What's here (holding on the map): the road, its limit and the area, with Go / Add as a stop
         engine.here?.let { h ->
             // above everything else, so the route options (which reach up this far on a phone) can't cover its buttons
-            Box(Modifier.align(Alignment.BottomCenter).zIndex(8f).padding(bottom = 96.dp)) { HereCardView(engine, h) }
+            Box(Modifier.align(Alignment.BottomCenter).zIndex(8f).padding(bottom = 16.dp)) { HereCardView(engine, h) }
         }
 
         // ---- the routes box, folded out beside the buttons by Other routes (as in Google Maps): your route and the other ways, with
@@ -630,7 +630,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         val besideButtons = with(dens) { buttonsWPx.toDp() } + 26.dp
         // (Card positions: on the other side if chosen, and lifted above the trip card when they share a corner)
         val speedShareTrip = !narrow && tripPx > 0 && tripAt == speedAt
-        if (!previewing && !searchActive) Box(
+        if (!previewing && !searchActive && engine.here == null) Box(
             when {
                 speedOnCardSide -> Modifier.align(if (speedAt == "left") Alignment.BottomStart else Alignment.BottomEnd)
                     .padding(start = 16.dp, end = 16.dp, bottom = if (speedShareTrip) tripH + 8.dp else 16.dp)

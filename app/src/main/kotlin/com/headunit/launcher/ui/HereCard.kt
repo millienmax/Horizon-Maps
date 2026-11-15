@@ -1,5 +1,6 @@
 package com.headunit.launcher.ui
 
+import androidx.compose.ui.draw.shadow
 import com.headunit.launcher.L
 
 import androidx.compose.material.icons.rounded.MyLocation
@@ -65,78 +66,118 @@ internal fun HereCardView(engine: NavEngine, h: NavEngine.HereCard) {
     val dropped = h.place.name == L.t("Dropped pin")
     val title = if (!dropped) h.place.name else h.road.ifBlank { if (h.loading) L.t("Looking…") else L.t("This spot") }
     val accent = landColour(h.landClass, h.roadClass)
+    val shape = RoundedCornerShape(24.dp)
     Column(
-        Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = 16.dp).panel(12.dp, RoundedCornerShape(24.dp), c.surface),
+        Modifier
+            .widthIn(max = 480.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(
+                elevation = 6.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.12f),
+                spotColor = Color.Black.copy(alpha = 0.18f)
+            )
+            .clip(shape)
+            .background(c.surface)
+            .border(1.dp, c.line.copy(alpha = 0.65f), shape)
+            .padding(start = 18.dp, end = 14.dp, top = 16.dp, bottom = 16.dp)
     ) {
-        // a thin band in the colour of what's here, along the top
-        Box(Modifier.fillMaxWidth().height(5.dp).background(Brush.horizontalGradient(listOf(accent, accent.copy(alpha = 0.25f)))))
-        Column(Modifier.padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 14.dp)) {
-            Row(verticalAlignment = Alignment.Top) {
-                // what kind of place, as a coloured tile
-                Box(Modifier.size(50.dp).clip(RoundedCornerShape(16.dp)).background(accent.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                    Icon(landIcon(h.landClass, dropped), null, tint = accent, modifier = Modifier.size(28.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(title, color = c.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RoadBadge(h)
-                        if (h.area.isNotBlank()) Chip(Icons.Rounded.Place, h.area)
-                    }
-                }
-                // the speed limit, as a little sign
-                if (h.limitMs > 0) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 8.dp)) {
-                    MiniLimitSign(Math.round(h.limitMs * if (engine.imperial) 2.23694 else 3.6).toInt())
-                    if (h.limitEstimated) Text("usual", color = c.sub, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
-                }
-                Box(Modifier.size(40.dp).clip(CircleShape).pressClick { engine.here = null }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Close, L.t("Close"), tint = c.sub, modifier = Modifier.size(22.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            // what kind of place, as a coloured squircle tile
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                Icon(landIcon(h.landClass, dropped), null, tint = accent, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = c.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RoadBadge(h)
+                    if (h.area.isNotBlank()) Chip(Icons.Rounded.Place, h.area)
                 }
             }
-            // what the land is, and how far it is
-            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (h.land.isNotBlank()) Fact(landIcon(h.landClass, false), h.land, accent)
-                if (h.distM >= 0) Fact(Icons.Rounded.NearMe, L.t("{0} away", Geo.fmtDist(h.distM, engine.imperial)), c.accent)
+            // the speed limit, as a little sign
+            if (h.limitMs > 0) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 8.dp)) {
+                MiniLimitSign(Math.round(h.limitMs * if (engine.imperial) 2.23694 else 3.6).toInt())
+                if (h.limitEstimated) Text("usual", color = c.sub, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
             }
-            Text(String.format(java.util.Locale.US, "%.5f, %.5f", h.place.pos.lat, h.place.pos.lon), color = c.sub.copy(alpha = 0.8f), fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 8.dp))
-            // Go, Add as a stop, Save
-            Row(Modifier.padding(top = 12.dp, end = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                // a route being driven or being planned: "Go here instead" and "Add as a stop" (holding on the map while
-                // choosing a route adds a stop on the way, as asked for on Reddit)
-                val driving = engine.route != null && engine.dest != null
-                Row(
-                    Modifier.clip(RoundedCornerShape(24.dp)).background(c.accent).pressClick { engine.hereGo(false) }.padding(horizontal = 18.dp, vertical = 11.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (driving) L.t("Go here instead") else L.t("Go"), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                }
-                if (driving) Row(
-                    Modifier.clip(RoundedCornerShape(24.dp)).background(c.tile).pressClick { engine.hereGo(true) }.padding(horizontal = 16.dp, vertical = 11.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.AddLocationAlt, null, tint = c.text, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(L.t("Add as a stop"), color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                }
-                // not driving: plan from this spot instead of where the GPS says you are (#88)
-                if (!driving) Row(
-                    Modifier.clip(RoundedCornerShape(24.dp)).background(c.accent.copy(alpha = 0.14f)).border(1.5.dp, c.accent, RoundedCornerShape(24.dp))
-                        .pressClick { engine.hereStartFrom() }.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.MyLocation, null, tint = c.accent, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(L.t("Start from here"), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                }
-                Spacer(Modifier.weight(1f))
-                var saved by remember(h.place) { mutableStateOf(engine.places.favourites().any { Geo.dist(it.pos, h.place.pos) < 15.0 }) }
-                Box(
-                    Modifier.size(46.dp).clip(CircleShape).background(if (saved) Color(0x33FFC83D) else c.tile).pressClick { saved = engine.hereSave() },
-                    contentAlignment = Alignment.Center,
-                ) { Icon(if (saved) Icons.Rounded.Star else Icons.Rounded.StarBorder, L.t("Save"), tint = if (saved) Color(0xFFFFC83D) else c.text, modifier = Modifier.size(24.dp)) }
+            Box(Modifier.size(38.dp).clip(CircleShape).pressClick { engine.here = null }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Close, L.t("Close"), tint = c.sub, modifier = Modifier.size(20.dp))
+            }
+        }
+        // what the land is, and how far it is
+        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (h.land.isNotBlank()) Fact(landIcon(h.landClass, false), h.land, accent)
+            if (h.distM >= 0) Fact(Icons.Rounded.NearMe, L.t("{0} away", Geo.fmtDist(h.distM, engine.imperial)), c.accent)
+        }
+        Text(
+            String.format(java.util.Locale.US, "%.5f, %.5f", h.place.pos.lat, h.place.pos.lon),
+            color = c.sub.copy(alpha = 0.8f),
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+        // Go, Add as a stop / Start from here, Save
+        Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val driving = engine.route != null && engine.dest != null
+            Row(
+                Modifier
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(c.accent)
+                    .pressClick { engine.hereGo(false) }
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (driving) L.t("Go here instead") else L.t("Go"), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+            if (driving) Row(
+                Modifier
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(c.tile)
+                    .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                    .pressClick { engine.hereGo(true) }
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.AddLocationAlt, null, tint = c.text, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(L.t("Add as a stop"), color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+            if (!driving) Row(
+                Modifier
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(c.accent.copy(alpha = 0.12f))
+                    .border(1.5.dp, c.accent, RoundedCornerShape(14.dp))
+                    .pressClick { engine.hereStartFrom() }
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.MyLocation, null, tint = c.accent, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(L.t("Start from here"), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+            Spacer(Modifier.weight(1f))
+            var saved by remember(h.place) { mutableStateOf(engine.places.favourites().any { Geo.dist(it.pos, h.place.pos) < 15.0 }) }
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (saved) Color(0x33FFC83D) else c.tile)
+                    .border(1.dp, if (saved) Color(0xFFFFC83D).copy(alpha = 0.5f) else c.line.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                    .pressClick { saved = engine.hereSave() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (saved) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    L.t("Save"),
+                    tint = if (saved) Color(0xFFFFC83D) else c.text,
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }
@@ -154,7 +195,7 @@ private fun RoadBadge(h: NavEngine.HereCard) {
         "secondary" -> Triple(Color.White, Color.Black, Color.Black)
         else -> Triple(c.tile, c.text, Color.Transparent)
     }
-    Box(Modifier.clip(RoundedCornerShape(6.dp)).background(bg).border(1.5.dp, border, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+    Box(Modifier.clip(RoundedCornerShape(8.dp)).background(bg).border(1.dp, border, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
         Text(label, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
     // the kind of road beside a numbered badge
@@ -164,9 +205,16 @@ private fun RoadBadge(h: NavEngine.HereCard) {
 @Composable
 private fun Chip(icon: ImageVector, text: String) {
     val c = LocalVw.current
-    Row(Modifier.clip(RoundedCornerShape(50)).background(c.tile).padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(c.tile)
+            .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .padding(start = 7.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Icon(icon, null, tint = c.sub, modifier = Modifier.size(15.dp))
-        Spacer(Modifier.width(3.dp))
+        Spacer(Modifier.width(4.dp))
         Text(text, color = c.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
