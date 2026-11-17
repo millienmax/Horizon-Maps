@@ -427,7 +427,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                 }
               }
             }
-            if (routing) {
+            if (routing && engine.arrival == null) {
                 if (engine.results.isNotEmpty()) ImmResults(engine, q) { q = "" }
                 else {
                     val curTurn = engine.turn
@@ -636,7 +636,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         val besideButtons = with(dens) { buttonsWPx.toDp() } + 26.dp
         // (Card positions: on the other side if chosen, and lifted above the trip card when they share a corner)
         val speedShareTrip = !narrow && tripPx > 0 && tripAt == speedAt
-        if (!previewing && !searchActive && engine.here == null) Box(
+        if (!previewing && !searchActive && engine.here == null && engine.arrival == null) Box(
             when {
                 speedOnCardSide -> Modifier.align(if (speedAt == "left") Alignment.BottomStart else Alignment.BottomEnd)
                     .padding(start = 16.dp, end = 16.dp, bottom = if (speedShareTrip) tripH + 8.dp else 16.dp)

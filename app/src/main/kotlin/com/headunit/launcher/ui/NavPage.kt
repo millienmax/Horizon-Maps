@@ -68,6 +68,9 @@ import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.LocalCafe
 import androidx.compose.material.icons.rounded.Wc
+import androidx.compose.material.icons.rounded.TurnLeft
+import androidx.compose.material.icons.rounded.TurnRight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.rounded.Close
@@ -575,11 +578,17 @@ private fun FlyOverBtn(engine: NavEngine) {
 }
 
 @Composable
-private fun ArrivalStat(value: String, label: String) {
+private fun ArrivalStat(value: String, label: String, modifier: Modifier = Modifier) {
     val c = LocalVw.current
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = c.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text(label, color = c.sub, fontSize = 12.sp)
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.tile.copy(alpha = 0.5f))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(value, color = c.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(L.t(label), color = c.sub, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -589,30 +598,88 @@ internal fun ArrivalCard(engine: NavEngine, a: ArrivalInfo, modifier: Modifier =
     val c = LocalVw.current
     val imp = engine.imperial
     val k = if (imp) 2.23694 else 3.6
+    val shape = RoundedCornerShape(28.dp)
+    val cardBg = if (c.dark) Color(0xFF1E2228) else Color(0xFFFFFFFF)
     Column(
-        modifier.widthIn(min = 380.dp, max = 460.dp).floating(28.dp).padding(22.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .shadow(
+                elevation = 14.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.16f),
+                spotColor = Color.Black.copy(alpha = 0.24f)
+            )
+            .clip(shape)
+            .background(cardBg)
+            .border(1.dp, c.line.copy(alpha = 0.5f), shape)
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(64.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Good.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Check, null, tint = Good, modifier = Modifier.size(38.dp))
+        Box(
+            Modifier.size(56.dp).clip(CircleShape).background(Color(0xFF0C563B)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(34.dp))
         }
-        Text(L.t("You've arrived"), color = c.sub, fontSize = 14.sp)
-        Text(a.name, color = c.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (a.side.isNotEmpty()) Text(L.t(if (a.side == "left") "On the left" else "On the right"), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            ArrivalStat(Geo.fmtDist(a.dist, imp), "distance")
-            ArrivalStat(Geo.fmtDur(a.secs), "time")
-            ArrivalStat("${Math.round(a.avgMs * k)} ${if (imp) "mph" else "km/h"}", "average")
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(L.t("You've arrived"), color = c.sub, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(
+                a.name,
+                color = c.text,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+            if (a.side.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
+                    Icon(
+                        if (a.side == "left") Icons.Rounded.TurnLeft else Icons.Rounded.TurnRight,
+                        null,
+                        tint = c.accent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        L.t(if (a.side == "left") "On the left" else "On the right"),
+                        color = c.accent,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ArrivalStat(Geo.fmtDist(a.dist, imp), "distance", Modifier.weight(1f))
+            ArrivalStat(Geo.fmtDur(a.secs), "time", Modifier.weight(1f))
+            ArrivalStat("${Math.round(a.avgMs * k)} ${if (imp) "mph" else "km/h"}", "average", Modifier.weight(1f))
         }
         engine.arrivalParking?.let { pk ->
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.tile).clickable { engine.dismissArrival(); engine.startRoute(pk.place) }.padding(horizontal = 14.dp, vertical = 10.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(c.tile.copy(alpha = 0.6f))
+                    .border(1.dp, c.line.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                    .clickable { engine.dismissArrival(); engine.startRoute(pk.place) }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.LocalParking, null, tint = Color(0xFF4C8DFF), modifier = Modifier.size(26.dp))
+                Box(
+                    Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2E6FD8)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Rounded.LocalParking, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
                 Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                    Text(L.t("Nearest parking"), color = c.sub, fontSize = 12.sp)
-                    Text(pk.place.name, color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(L.t("Nearest parking"), color = c.sub, fontSize = 11.sp)
+                    Text(pk.place.name, color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text(Geo.fmtDist(pk.dist, imp), color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp))
                 Text(L.t("Go"), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -623,7 +690,6 @@ internal fun ArrivalCard(engine: NavEngine, a: ArrivalInfo, modifier: Modifier =
                 var fav by remember { mutableStateOf(engine.places.isFavourite(p)) }
                 Pill(if (fav) L.t("Saved") else L.t("Save place"), fav, { fav = engine.places.toggleFavourite(p) })
             }
-            // the way back to where this trip started (home, if it started there)
             if (engine.tripFrom != null && engine.prefs.b(PreferenceKeys.ROUTEBACK, true)) Pill(L.t("Route back"), false, { engine.routeBack() })
             Pill(L.t("Done"), true, { engine.dismissArrival() })
         }
