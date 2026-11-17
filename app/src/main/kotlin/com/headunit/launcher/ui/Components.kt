@@ -42,6 +42,10 @@ import androidx.compose.material.icons.rounded.RoundaboutRight
 import androidx.compose.material.icons.rounded.Straight
 import androidx.compose.material.icons.rounded.TurnLeft
 import androidx.compose.material.icons.rounded.TurnRight
+import androidx.compose.material.icons.rounded.TurnSlightLeft
+import androidx.compose.material.icons.rounded.TurnSlightRight
+import androidx.compose.material.icons.rounded.TurnSharpLeft
+import androidx.compose.material.icons.rounded.TurnSharpRight
 import androidx.compose.material.icons.rounded.UTurnLeft
 import androidx.compose.material.icons.rounded.UTurnRight
 import androidx.compose.material3.Text
@@ -334,12 +338,12 @@ fun ManeuverArrow(
             u.contains("MERGE") -> Icons.Rounded.Merge to 0f
             u.contains("FORK") && u.contains("LEFT") -> Icons.Rounded.ForkLeft to 0f
             u.contains("FORK") && u.contains("RIGHT") -> Icons.Rounded.ForkRight to 0f
-            u == "TURN_LEFT" -> Icons.Rounded.TurnLeft to 0f
-            u == "TURN_RIGHT" -> Icons.Rounded.TurnRight to 0f
-            u == "SHARP_LEFT" -> Icons.Rounded.TurnLeft to (-20f)
-            u == "SHARP_RIGHT" -> Icons.Rounded.TurnRight to 20f
-            u == "BEAR_LEFT" || u == "KEEP_LEFT" -> Icons.Rounded.TurnLeft to 25f
-            u == "BEAR_RIGHT" || u == "KEEP_RIGHT" -> Icons.Rounded.TurnRight to (-25f)
+            u == "SHARP_LEFT" || u.contains("SHARP_LEFT") -> Icons.Rounded.TurnSharpLeft to 0f
+            u == "SHARP_RIGHT" || u.contains("SHARP_RIGHT") -> Icons.Rounded.TurnSharpRight to 0f
+            u == "BEAR_LEFT" || u == "KEEP_LEFT" || u == "SLIGHT_LEFT" || u.contains("SLIGHT_LEFT") -> Icons.Rounded.TurnSlightLeft to 0f
+            u == "BEAR_RIGHT" || u == "KEEP_RIGHT" || u == "SLIGHT_RIGHT" || u.contains("SLIGHT_RIGHT") -> Icons.Rounded.TurnSlightRight to 0f
+            u == "TURN_LEFT" || u == "LEFT" -> Icons.Rounded.TurnLeft to 0f
+            u == "TURN_RIGHT" || u == "RIGHT" -> Icons.Rounded.TurnRight to 0f
             u == "STRAIGHT" || u == "DEPART" || u == "FOLLOW" -> Icons.Rounded.Straight to 0f
             u.contains("LEFT") -> Icons.Rounded.TurnLeft to 0f
             u.contains("RIGHT") -> Icons.Rounded.TurnRight to 0f

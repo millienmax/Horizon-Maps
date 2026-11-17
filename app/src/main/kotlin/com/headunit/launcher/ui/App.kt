@@ -375,8 +375,9 @@ fun App(prefs: Prefs, engine: NavEngine, map: MapBinding) { SafeArea(prefs) { Te
                     // Portrait: just above the trip card at the bottom.
                     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
                         val narrow = maxWidth < 720.dp
+                        val alertBottom = if (engine.route != null && !engine.previewing) 145.dp else 18.dp
                         Box(
-                            if (narrow) Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 250.dp)
+                            if (narrow) Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = alertBottom)
                             else Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = if (engine.mirrored) 290.dp else 412.dp, end = if (engine.mirrored) 412.dp else 290.dp, top = 16.dp),
                             contentAlignment = if (narrow) Alignment.BottomCenter else Alignment.TopCenter,
                         ) {

@@ -453,7 +453,6 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                     JunctionCloseup(engine)
                     AvgSpeedCard(engine)
                     ServicesCard(engine)
-                    ParkingCard(engine)
                 }
             }
             if (engine.nearbyKind != null && (!previewing || engine.stopMode)) NearbyCard(engine)
@@ -1449,6 +1448,10 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
         else if ((inc != null && engine.alert?.kind != "incident") || (cam != null && engine.alert?.kind != "camera")) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (inc != null && engine.alert?.kind != "incident") HazardBadge("incident", inc.label, Geo.fmtDist(inc.dist, engine.imperial))
             if (cam != null && engine.alert?.kind != "camera") HazardBadge("camera", L.t("Speed camera"), Geo.fmtDist(cam.toDouble(), engine.imperial))
+        }
+        // Destination parking suggestions (docked right above the trip card)
+        if (engine.parkingNear.isNotEmpty()) {
+            ParkingCard(engine, Modifier.padding(horizontal = if (narrow) 8.dp else 0.dp))
         }
         eta?.let { e ->
             val dc = if (e.delayMin >= 10) Bad else if (e.delayMin >= 1) Warn else Good

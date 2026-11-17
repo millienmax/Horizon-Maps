@@ -33,6 +33,8 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.TurnSharpLeft
+import androidx.compose.material.icons.rounded.TurnSharpRight
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Eco
@@ -144,17 +146,23 @@ fun AlertSign(a: AlertInfo, size: Dp) {
                 Text("STOP", color = Color.White, fontSize = (size.value * 0.26f).sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
             "bend", "bend-l" -> {
-                // the chevron sign: yellow, with a black chevron pointing the way the road bends
+                // High-visibility MD3 highway advisory diamond warning sign
                 val right = a.kind == "bend"
-                Canvas(Modifier.fillMaxSize()) {
-                    val w = this.size.width
-                    val h = this.size.height
-                    drawRoundRect(Color(0xFFFACC15), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.14f))
-                    val p = Path().apply {
-                        if (right) { moveTo(w * 0.36f, h * 0.24f); lineTo(w * 0.64f, h * 0.5f); lineTo(w * 0.36f, h * 0.76f) }
-                        else { moveTo(w * 0.64f, h * 0.24f); lineTo(w * 0.36f, h * 0.5f); lineTo(w * 0.64f, h * 0.76f) }
-                    }
-                    drawPath(p, Color.Black, style = Stroke(w * 0.13f, join = StrokeJoin.Miter))
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier
+                            .size(size * 0.72f)
+                            .graphicsLayer { rotationZ = 45f }
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFFACC15))
+                            .border(2.dp, Color(0xFF151515), RoundedCornerShape(6.dp))
+                    )
+                    Icon(
+                        if (right) Icons.Rounded.TurnSharpRight else Icons.Rounded.TurnSharpLeft,
+                        null,
+                        tint = Color(0xFF151515),
+                        modifier = Modifier.size(size * 0.48f)
+                    )
                 }
             }
             "wrongway" -> {
@@ -220,23 +228,50 @@ fun AlertSign(a: AlertInfo, size: Dp) {
 /** Large alert banner with a road-sign badge and a countdown bar. */
 @Composable
 fun AlertBanner(a: AlertInfo, modifier: Modifier = Modifier) {
+    val c = LocalVw.current
     val col = alertColor(a.kind)
     val prog = remember(a) { Animatable(1f) }
     LaunchedEffect(a) { prog.animateTo(0f, tween(a.ms.toInt().coerceAtLeast(500), easing = LinearEasing)) }
-    // compact, so it fits between the turn card and the buttons on the right without covering either
     val shape = RoundedCornerShape(24.dp)
     Column(
-        modifier.widthIn(max = 420.dp).shadow(14.dp, shape).clip(shape)
-            .background(Color(0xF2121922)).border(1.5.dp, col.copy(alpha = 0.7f), shape),
+        modifier
+            .widthIn(max = 420.dp)
+            .shadow(
+                elevation = 10.dp,
+                shape = shape,
+                ambientColor = col.copy(alpha = 0.20f),
+                spotColor = col.copy(alpha = 0.30f)
+            )
+            .clip(shape)
+            .background(c.surface)
+            .border(1.5.dp, col.copy(alpha = 0.85f), shape),
     ) {
-        Row(Modifier.padding(start = 12.dp, end = 18.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            AlertSign(a, 54.dp)
-            Column(Modifier.padding(start = 12.dp)) {
-                Text(alertLabel(a.kind), color = col, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, maxLines = 1)
-                Text(a.text, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 22.sp)
+        Row(
+            Modifier.padding(start = 14.dp, end = 18.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AlertSign(a, 50.dp)
+            Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                Text(
+                    alertLabel(a.kind),
+                    color = col,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    maxLines = 1
+                )
+                Text(
+                    a.text,
+                    color = c.text,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 22.sp
+                )
             }
         }
-        Box(Modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.08f))) {
+        Box(Modifier.fillMaxWidth().height(4.dp).background(col.copy(alpha = 0.15f))) {
             Box(Modifier.fillMaxWidth(prog.value).fillMaxHeight().background(col))
         }
     }

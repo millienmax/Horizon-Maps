@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.GpsOff
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.LocalCafe
+import androidx.compose.material.icons.rounded.LocalParking
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Map
@@ -264,27 +265,106 @@ fun ParkingCard(engine: NavEngine, modifier: Modifier = Modifier) {
     val list = engine.parkingNear
     if (list.isEmpty()) return
     val c = LocalVw.current
-    val shape = RoundedCornerShape(20.dp)
-    Column(modifier.fillMaxWidth().panel(6.dp, shape, c.surface).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(L.t("Parking near {0}", engine.dest?.name ?: "your destination"), color = c.sub, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Box(Modifier.size(32.dp).clip(CircleShape).clickable { engine.parkingNear = emptyList() }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Close, L.t("Close"), tint = c.sub, modifier = Modifier.size(16.dp))
+    val shape = RoundedCornerShape(24.dp)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.12f),
+                spotColor = Color.Black.copy(alpha = 0.18f)
+            )
+            .clip(shape)
+            .background(c.surface)
+            .border(1.dp, c.line.copy(alpha = 0.65f), shape)
+            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 8.dp)
+        ) {
+            Box(
+                Modifier.size(28.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.LocalParking, null, tint = c.accent, modifier = Modifier.size(18.dp))
+            }
+            Text(
+                L.t("Parking near {0}", engine.dest?.name ?: "destination"),
+                color = c.text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 10.dp, end = 8.dp)
+            )
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(c.tile)
+                    .clickable { engine.parkingNear = emptyList() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Close, L.t("Close"), tint = c.sub, modifier = Modifier.size(18.dp))
             }
         }
-        list.forEach { n ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { engine.parkAt(n) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)).background(Color(0xFF2E6FD8)), contentAlignment = Alignment.Center) {
-                    Text("P", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            list.take(3).forEach { n ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(c.tile.copy(alpha = 0.45f))
+                        .clickable { engine.parkAt(n) }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2E6FD8)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.LocalParking, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Text(
+                            n.place.name,
+                            color = c.text,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (n.extra.isNotBlank()) {
+                            Text(
+                                n.extra,
+                                color = c.sub,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    val walkMins = maxOf(1, Math.round(n.dist / 80.0).toInt())
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(c.surface)
+                            .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(50))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.DirectionsWalk, null, tint = c.sub, modifier = Modifier.size(14.dp))
+                        Text(
+                            L.t("{0} min", walkMins),
+                            color = c.sub,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(start = 2.dp)
+                        )
+                    }
                 }
-                // the price, opening hours and spaces under the name, where they're known
-                Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                    Text(n.place.name, color = c.text, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (n.extra.isNotBlank()) Text(n.extra, color = c.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                // a walk at about 80 m a minute
-                Text(L.t("{0} min walk", maxOf(1, Math.round(n.dist / 80.0).toInt())), color = c.sub, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, end = 8.dp))
             }
         }
     }
