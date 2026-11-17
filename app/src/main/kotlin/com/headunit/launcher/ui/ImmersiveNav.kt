@@ -1609,178 +1609,108 @@ internal fun ImmSpeed(engine: NavEngine) {
     ) { SpeedWithNext(engine) }
 }
 
-/**
- * MD3 Expressive Alert Shield Shape (Option A):
- * Fluidly morphs between a circle (t = 0f) and a rounded Reuleaux warning shield (t = 1f)
- * using parametric cubic Bézier curves with C1 continuity.
- */
-private fun alertShieldShape(t: Float): Shape = GenericShape { size, _ ->
-    val w = size.width
-    val h = size.height
-    val cx = w / 2f
-    val cy = h / 2f
-    val r = minOf(w, h) / 2f - 2f * (1f - t)
-    val clampedT = t.coerceIn(0f, 1f)
-    val k = 0.7698f * (1f - 0.48f * clampedT)
-    val yShift = 3.5f * clampedT
-    val a1 = Math.toRadians(30.0 + 8.0 * clampedT).toFloat()
-    val a2 = (Math.PI - a1.toDouble()).toFloat()
-
-    val p0x = cx
-    val p0y = cy - r + yShift
-    val p1x = cx + r * kotlin.math.cos(a1)
-    val p1y = cy + r * kotlin.math.sin(a1) + yShift
-    val p2x = cx - r * kotlin.math.cos(a1)
-    val p2y = cy + r * kotlin.math.sin(a1) + yShift
-
-    val t0x = 1f
-    val t0y = 0f
-    val t1x = -kotlin.math.sin(a1)
-    val t1y = kotlin.math.cos(a1)
-    val t2x = -kotlin.math.sin(a2)
-    val t2y = kotlin.math.cos(a2)
-
-    moveTo(p0x, p0y)
-    // Top to bottom-right
-    cubicTo(
-        p0x + k * r * t0x, p0y + k * r * t0y,
-        p1x - k * r * t1x, p1y - k * r * t1y,
-        p1x, p1y
-    )
-    // Bottom-right to bottom-left
-    cubicTo(
-        p1x + k * r * t1x, p1y + k * r * t1y,
-        p2x - k * r * t2x, p2y - k * r * t2y,
-        p2x, p2y
-    )
-    // Bottom-left back to top
-    cubicTo(
-        p2x + k * r * t2x, p2y + k * r * t2y,
-        p0x - k * r * t0x, p0y - k * r * t0y,
-        p0x, p0y
-    )
-    close()
-}
-
 private var testNextLimit by mutableStateOf<Pair<Double, Double>?>(null)
+
+/**
+ * Connected MD3 speed limit sign cluster:
+ * Current speed limit sign, with the upcoming limit badge mounted directly atop it when approaching a change.
+ */
+@Composable
+private fun SpeedLimitWithUpcoming(
+    engine: NavEngine,
+    size: Dp,
+    modifier: Modifier = Modifier
+) {
+    val lim = engine.speedLimit ?: return
+    val nx = engine.nextLimit ?: testNextLimit
+    val showNext = nx != null && engine.prefs.b(PreferenceKeys.NEXT_LIMIT, true)
+    val c = LocalVw.current
+    val k = if (engine.imperial) 2.23694 else 3.6
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        AnimatedVisibility(
+            visible = showNext && nx != null,
+            enter = fadeIn(tween(200)) + androidx.compose.animation.expandVertically(spring(Spring.DampingRatioMediumBouncy)) + androidx.compose.animation.slideInVertically(spring(Spring.DampingRatioMediumBouncy)) { -it / 2 },
+            exit = fadeOut(tween(150)) + androidx.compose.animation.shrinkVertically(tween(150)) + androidx.compose.animation.slideOutVertically { -it / 2 }
+        ) {
+            if (nx != null) {
+                val curLimit = lim
+                val nextLimitMps = nx.first
+                val isDrop = curLimit > 0 && nextLimitMps < (curLimit - 0.5)
+                val isIncrease = curLimit > 0 && nextLimitMps > (curLimit + 0.5)
+                val accentCol = if (isDrop) Warn else if (isIncrease) c.accent else c.text
+                val bgCol = if (isDrop) androidx.compose.ui.graphics.lerp(c.surface, Warn, 0.16f)
+                            else if (isIncrease) androidx.compose.ui.graphics.lerp(c.surface, c.accent, 0.14f)
+                            else c.surface
+                val borderCol = if (isDrop) Warn.copy(alpha = 0.85f)
+                                else if (isIncrease) c.accent.copy(alpha = 0.80f)
+                                else c.line.copy(alpha = 0.6f)
+                val pillShape = RoundedCornerShape(12.dp)
+                val num = "${(Math.round(nx.first * k / 5.0) * 5)}"
+                val dist = Geo.fmtDist(nx.second, engine.imperial)
+
+                Row(
+                    modifier = Modifier
+                        .shadow(
+                            4.dp,
+                            pillShape,
+                            ambientColor = if (isDrop) Warn.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.12f),
+                            spotColor = if (isDrop) Warn.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f)
+                        )
+                        .clip(pillShape)
+                        .background(bgCol)
+                        .border(1.2.dp, borderCol, pillShape)
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        if (isDrop) Icons.Rounded.ArrowDownward else Icons.Rounded.ArrowUpward,
+                        contentDescription = null,
+                        tint = accentCol,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        num,
+                        color = if (isDrop) Warn else c.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1
+                    )
+                    Text(
+                        dist,
+                        color = c.sub,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+        SpeedLimitSign(
+            engine,
+            size,
+            onClick = {
+                testNextLimit = if (testNextLimit == null) {
+                    Pair(35.0 / 2.23694, 152.4)
+                } else if (testNextLimit!!.first < 20.0) {
+                    Pair(65.0 / 2.23694, 304.8)
+                } else {
+                    null
+                }
+            }
+        )
+    }
+}
 
 /** The speed, with the next speed limit on the route (when it changes within about half a mile) small above it. */
 @Composable
 private fun SpeedWithNext(engine: NavEngine) {
-    val nx = engine.nextLimit ?: testNextLimit
-    if (nx == null || !engine.prefs.b(PreferenceKeys.NEXT_LIMIT, true)) { SpeedBlock(engine); return }
-    val c = LocalVw.current
-    val k = if (engine.imperial) 2.23694 else 3.6
-    val ringSign = engine.prefs.b(PreferenceKeys.SPEEDRING, true) && engine.speedLimit != null && engine.prefs.b(PreferenceKeys.MAPSPEED, true)
-
-    val curLimit = engine.speedLimit ?: 0.0
-    val nextLimitMps = nx.first
-    val isDrop = curLimit > 0 && nextLimitMps < (curLimit - 0.5)
-    val isIncrease = curLimit > 0 && nextLimitMps > (curLimit + 0.5)
-
-    val chipBorderColor by androidx.compose.animation.animateColorAsState(
-        targetValue = when {
-            isDrop -> Warn.copy(alpha = 0.85f)
-            isIncrease -> c.accent.copy(alpha = 0.75f)
-            else -> c.line.copy(alpha = 0.5f)
-        },
-        label = "nextLimitBorder"
-    )
-    val chipBg by androidx.compose.animation.animateColorAsState(
-        targetValue = when {
-            isDrop -> androidx.compose.ui.graphics.lerp(c.surface, Warn, 0.12f)
-            isIncrease -> androidx.compose.ui.graphics.lerp(c.surface, c.accent, 0.09f)
-            else -> c.surface
-        },
-        label = "nextLimitBg"
-    )
-
-    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(if (ringSign) 26.dp else 6.dp)) {
-        Row(
-            Modifier
-                .shadow(
-                    6.dp,
-                    RoundedCornerShape(18.dp),
-                    ambientColor = if (isDrop) Warn.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.12f),
-                    spotColor = if (isDrop) Warn.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f)
-                )
-                .clip(RoundedCornerShape(18.dp))
-                .background(chipBg)
-                .border(if (isDrop || isIncrease) 1.5.dp else 1.dp, chipBorderColor, RoundedCornerShape(18.dp))
-                .padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            // Directional warning badge: Downward arrow on speed reduction, Upward arrow on speed increase
-            if (isDrop) {
-                Box(
-                    Modifier
-                        .size(26.dp)
-                        .clip(CircleShape)
-                        .background(Warn.copy(alpha = 0.22f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.ArrowDownward,
-                        contentDescription = "Speed limit dropping",
-                        tint = Warn,
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
-            } else if (isIncrease) {
-                Box(
-                    Modifier
-                        .size(26.dp)
-                        .clip(CircleShape)
-                        .background(c.accent.copy(alpha = 0.20f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.ArrowUpward,
-                        contentDescription = "Speed limit increasing",
-                        tint = c.accent,
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
-            }
-
-            val num = "${(Math.round(nx.first * k / 5.0) * 5)}"
-            val numSize = with(androidx.compose.ui.platform.LocalDensity.current) { 13.dp.toSp() }
-            // Speed limit sign
-            if (engine.limitSignStyle != "round") Box(
-                Modifier.size(width = 28.dp, height = 34.dp).clip(RoundedCornerShape(4.dp)).background(Color.White)
-                    .border(2.5.dp, Color(0xFF151515), RoundedCornerShape(4.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(num, color = Color.Black, fontSize = numSize, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
-            } else Box(
-                Modifier.size(34.dp).clip(CircleShape).background(Color.White).border(4.dp, Color(0xFFE0202A), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(num, color = Color.Black, fontSize = numSize, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
-            }
-
-            Column {
-                if (isDrop) {
-                    Text(
-                        L.t("Slow down"),
-                        color = Warn,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
-                Text(
-                    L.t("in {0}", Geo.fmtDist(nx.second, engine.imperial)),
-                    color = c.text,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-            }
-        }
-        SpeedBlock(engine)
-    }
+    SpeedBlock(engine)
 }
 
 @Composable
@@ -1795,12 +1725,12 @@ private fun SpeedBlock(engine: NavEngine) {
     val ratio = if (lim != null && lim > 0 && !engine.limitEstimated) (sp / lim).toFloat() else 0f
     val over = engine.overLimit || ratio > 1.04f
 
-    val morphProgress by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (over) 1f else 0f,
+    val blockCorner by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 10.dp else 22.dp,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "blockMorph"
+        label = "blockSquircle"
     )
-    val blockShape = alertShieldShape(morphProgress)
+    val blockShape = RoundedCornerShape(blockCorner)
 
     val blockBg by androidx.compose.animation.animateColorAsState(
         targetValue = if (over) androidx.compose.ui.graphics.lerp(c.surface, Bad, 0.14f) else c.surface,
@@ -1817,7 +1747,7 @@ private fun SpeedBlock(engine: NavEngine) {
         label = "blockBorderWidth"
     )
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (show && engine.mirrored && !engine.isCar && lim != null) SpeedLimitSign(engine, 70.dp)
+        if (show && engine.mirrored && !engine.isCar && lim != null) SpeedLimitWithUpcoming(engine, 70.dp)
         if (show) Column(
             Modifier
                 .width(78.dp)
@@ -1831,7 +1761,7 @@ private fun SpeedBlock(engine: NavEngine) {
             Text("${Math.round((engine.fix?.speed ?: 0.0) * k)}", color = speedTint(engine) ?: c.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Text(if (engine.imperial) "mph" else "km/h", color = c.sub, fontSize = 12.sp)
         }
-        if (lim != null && !(show && engine.mirrored && !engine.isCar)) SpeedLimitSign(engine, 70.dp)
+        if (lim != null && !(show && engine.mirrored && !engine.isCar)) SpeedLimitWithUpcoming(engine, 70.dp)
     }
 }
 
@@ -1857,14 +1787,14 @@ private fun SpeedRing(engine: NavEngine, show: Boolean, k: Double) {
     }
     val arcCol by androidx.compose.animation.animateColorAsState(col, androidx.compose.animation.core.tween(400), label = "ringCol")
 
-    // MD3 Expressive Alert Speedometer Shape:
-    // Fluidly morphs from circle (normal) into soft Reuleaux warning shield (over limit)
-    val morphProgress by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (over) 1f else 0f,
+    // MD3 Expressive Alert Speedometer Shape (Row 1, Col 2: Squircle):
+    // Morphs with bouncy spring physics between a circle (normal) and an MD3 Squircle (over limit)
+    val morphCorner by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 18.dp else 52.dp,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "speedMorph"
+        label = "speedSquircle"
     )
-    val speedShape = alertShieldShape(morphProgress)
+    val speedShape = RoundedCornerShape(morphCorner)
 
     val speedBg by androidx.compose.animation.animateColorAsState(
         targetValue = if (over) androidx.compose.ui.graphics.lerp(c.surface, Bad, 0.14f) else c.surface,
@@ -1932,18 +1862,11 @@ private fun SpeedRing(engine: NavEngine, show: Boolean, k: Double) {
         if (lim != null) Box(
             Modifier.align(if (!show) Alignment.Center else if (signRight) Alignment.TopEnd else Alignment.TopStart)
                 .offset(x = if (!show) 0.dp else if (signRight) 30.dp else (-30).dp, y = if (show) (-18).dp else 0.dp)
-                .clickable {
-                    testNextLimit = if (testNextLimit == null) {
-                        Pair(35.0 / 2.23694, 152.4)
-                    } else if (testNextLimit!!.first < 20.0) {
-                        Pair(65.0 / 2.23694, 304.8)
-                    } else {
-                        null
-                    }
-                }
         ) {
-            // (the upright North American board is narrower than the round sign, so it gets a little more height to stay readable)
-            SpeedLimitSign(engine, if (!show) 70.dp else if (engine.limitSignStyle != "round") 58.dp else 50.dp)
+            SpeedLimitWithUpcoming(
+                engine,
+                if (!show) 70.dp else if (engine.limitSignStyle != "round") 58.dp else 50.dp
+            )
         }
     }
 }
