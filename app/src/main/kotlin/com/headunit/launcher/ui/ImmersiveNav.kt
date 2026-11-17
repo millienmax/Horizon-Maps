@@ -67,12 +67,16 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Park
@@ -1603,37 +1607,175 @@ internal fun ImmSpeed(engine: NavEngine) {
     ) { SpeedWithNext(engine) }
 }
 
+/**
+ * MD3 Expressive Alert Shield Shape (Option A):
+ * Fluidly morphs between a circle (t = 0f) and a rounded Reuleaux warning shield (t = 1f)
+ * using parametric cubic Bézier curves with C1 continuity.
+ */
+private fun alertShieldShape(t: Float): Shape = GenericShape { size, _ ->
+    val w = size.width
+    val h = size.height
+    val cx = w / 2f
+    val cy = h / 2f
+    val r = minOf(w, h) / 2f - 2f * (1f - t)
+    val clampedT = t.coerceIn(0f, 1f)
+    val k = 0.7698f * (1f - 0.48f * clampedT)
+    val yShift = 3.5f * clampedT
+    val a1 = Math.toRadians(30.0 + 8.0 * clampedT).toFloat()
+    val a2 = (Math.PI - a1.toDouble()).toFloat()
+
+    val p0x = cx
+    val p0y = cy - r + yShift
+    val p1x = cx + r * kotlin.math.cos(a1)
+    val p1y = cy + r * kotlin.math.sin(a1) + yShift
+    val p2x = cx - r * kotlin.math.cos(a1)
+    val p2y = cy + r * kotlin.math.sin(a1) + yShift
+
+    val t0x = 1f
+    val t0y = 0f
+    val t1x = -kotlin.math.sin(a1)
+    val t1y = kotlin.math.cos(a1)
+    val t2x = -kotlin.math.sin(a2)
+    val t2y = kotlin.math.cos(a2)
+
+    moveTo(p0x, p0y)
+    // Top to bottom-right
+    cubicTo(
+        p0x + k * r * t0x, p0y + k * r * t0y,
+        p1x - k * r * t1x, p1y - k * r * t1y,
+        p1x, p1y
+    )
+    // Bottom-right to bottom-left
+    cubicTo(
+        p1x + k * r * t1x, p1y + k * r * t1y,
+        p2x - k * r * t2x, p2y - k * r * t2y,
+        p2x, p2y
+    )
+    // Bottom-left back to top
+    cubicTo(
+        p2x + k * r * t2x, p2y + k * r * t2y,
+        p0x - k * r * t0x, p0y - k * r * t0y,
+        p0x, p0y
+    )
+    close()
+}
+
+private var testNextLimit by mutableStateOf<Pair<Double, Double>?>(null)
+
 /** The speed, with the next speed limit on the route (when it changes within about half a mile) small above it. */
 @Composable
 private fun SpeedWithNext(engine: NavEngine) {
-    val nx = engine.nextLimit
+    val nx = engine.nextLimit ?: testNextLimit
     if (nx == null || !engine.prefs.b(PreferenceKeys.NEXT_LIMIT, true)) { SpeedBlock(engine); return }
     val c = LocalVw.current
     val k = if (engine.imperial) 2.23694 else 3.6
-    // with the speedometer ring, the limit sign pokes up above the ring's top corner: the gap leaves room for it, so the two
-    // don't overlap (on the car screen they did)
     val ringSign = engine.prefs.b(PreferenceKeys.SPEEDRING, true) && engine.speedLimit != null && engine.prefs.b(PreferenceKeys.MAPSPEED, true)
+
+    val curLimit = engine.speedLimit ?: 0.0
+    val nextLimitMps = nx.first
+    val isDrop = curLimit > 0 && nextLimitMps < (curLimit - 0.5)
+    val isIncrease = curLimit > 0 && nextLimitMps > (curLimit + 0.5)
+
+    val chipBorderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = when {
+            isDrop -> Warn.copy(alpha = 0.85f)
+            isIncrease -> c.accent.copy(alpha = 0.75f)
+            else -> c.line.copy(alpha = 0.5f)
+        },
+        label = "nextLimitBorder"
+    )
+    val chipBg by androidx.compose.animation.animateColorAsState(
+        targetValue = when {
+            isDrop -> androidx.compose.ui.graphics.lerp(c.surface, Warn, 0.12f)
+            isIncrease -> androidx.compose.ui.graphics.lerp(c.surface, c.accent, 0.09f)
+            else -> c.surface
+        },
+        label = "nextLimitBg"
+    )
+
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(if (ringSign) 26.dp else 6.dp)) {
         Row(
             Modifier
-                .shadow(6.dp, RoundedCornerShape(18.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
+                .shadow(
+                    6.dp,
+                    RoundedCornerShape(18.dp),
+                    ambientColor = if (isDrop) Warn.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.12f),
+                    spotColor = if (isDrop) Warn.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f)
+                )
                 .clip(RoundedCornerShape(18.dp))
-                .background(c.surface)
-                .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                .background(chipBg)
+                .border(if (isDrop || isIncrease) 1.5.dp else 1.dp, chipBorderColor, RoundedCornerShape(18.dp))
                 .padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Directional warning badge: Downward arrow on speed reduction, Upward arrow on speed increase
+            if (isDrop) {
+                Box(
+                    Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Warn.copy(alpha = 0.22f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.ArrowDownward,
+                        contentDescription = "Speed limit dropping",
+                        tint = Warn,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+            } else if (isIncrease) {
+                Box(
+                    Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(c.accent.copy(alpha = 0.20f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.ArrowUpward,
+                        contentDescription = "Speed limit increasing",
+                        tint = c.accent,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+            }
+
             val num = "${(Math.round(nx.first * k / 5.0) * 5)}"
             val numSize = with(androidx.compose.ui.platform.LocalDensity.current) { 13.dp.toSp() }
-            // the same kind of sign as the main one: the red ring, or the black-bordered board in the US and Canada
-            if (engine.limitSignStyle != "round") Box(Modifier.size(width = 28.dp, height = 34.dp).clip(RoundedCornerShape(4.dp)).background(Color.White)
-                .border(2.5.dp, Color(0xFF151515), RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {
+            // Speed limit sign
+            if (engine.limitSignStyle != "round") Box(
+                Modifier.size(width = 28.dp, height = 34.dp).clip(RoundedCornerShape(4.dp)).background(Color.White)
+                    .border(2.5.dp, Color(0xFF151515), RoundedCornerShape(4.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(num, color = Color.Black, fontSize = numSize, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
+            } else Box(
+                Modifier.size(34.dp).clip(CircleShape).background(Color.White).border(4.dp, Color(0xFFE0202A), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(num, color = Color.Black, fontSize = numSize, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
             }
-            else Box(Modifier.size(34.dp).clip(CircleShape).background(Color.White).border(4.dp, Color(0xFFE0202A), CircleShape), contentAlignment = Alignment.Center) {
-                Text(num, color = Color.Black, fontSize = numSize, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
+
+            Column {
+                if (isDrop) {
+                    Text(
+                        L.t("Slow down"),
+                        color = Warn,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+                Text(
+                    L.t("in {0}", Geo.fmtDist(nx.second, engine.imperial)),
+                    color = c.text,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
             }
-            Text(L.t("in {0}", Geo.fmtDist(nx.second, engine.imperial)), color = c.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
         SpeedBlock(engine)
     }
@@ -1650,22 +1792,14 @@ private fun SpeedBlock(engine: NavEngine) {
     val sp = engine.fix?.speed ?: 0.0
     val ratio = if (lim != null && lim > 0 && !engine.limitEstimated) (sp / lim).toFloat() else 0f
     val over = engine.overLimit || ratio > 1.04f
-    val cornerTS by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (over) 8.dp else 20.dp,
+
+    val morphProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (over) 1f else 0f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "cornerTSBlock"
+        label = "blockMorph"
     )
-    val cornerBE by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (over) 8.dp else 20.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "cornerBEBlock"
-    )
-    val cornerOther by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (over) 20.dp else 20.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "cornerOtherBlock"
-    )
-    val blockShape = RoundedCornerShape(cornerTS, cornerOther, cornerBE, cornerOther)
+    val blockShape = alertShieldShape(morphProgress)
+
     val blockBg by androidx.compose.animation.animateColorAsState(
         targetValue = if (over) androidx.compose.ui.graphics.lerp(c.surface, Bad, 0.14f) else c.surface,
         animationSpec = androidx.compose.animation.core.tween(300),
@@ -1681,8 +1815,6 @@ private fun SpeedBlock(engine: NavEngine) {
         label = "blockBorderWidth"
     )
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Keep the speed cluster in the same screen position, but mirror the sign's
-        // relationship to the speed readout for left-hand-drive layouts.
         if (show && engine.mirrored && !engine.isCar && lim != null) SpeedLimitSign(engine, 70.dp)
         if (show) Column(
             Modifier
@@ -1714,7 +1846,8 @@ private fun SpeedRing(engine: NavEngine, show: Boolean, k: Double) {
     val target = (sp / full).toFloat().coerceIn(0f, 1f)
     val frac by androidx.compose.animation.core.animateFloatAsState(target, androidx.compose.animation.core.tween(350), label = "ring")
     val ratio = if (lim != null && lim > 0 && !engine.limitEstimated) (sp / lim).toFloat() else 0f
-    val over = engine.overLimit || ratio > 1.04f
+    var testOver by remember { mutableStateOf(false) }
+    val over = engine.overLimit || ratio > 1.04f || testOver
     val col = when {
         over -> Bad
         ratio >= 0.9f -> androidx.compose.ui.graphics.lerp(Warn, Bad, ((ratio - 0.9f) / 0.14f).coerceIn(0f, 1f))
@@ -1722,28 +1855,14 @@ private fun SpeedRing(engine: NavEngine, show: Boolean, k: Double) {
     }
     val arcCol by androidx.compose.animation.animateColorAsState(col, androidx.compose.animation.core.tween(400), label = "ringCol")
 
-    // MD3 Expressive Shape-Shifting Corner Radii
-    val cornerTS by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (over) 12.dp else 52.dp,
+    // MD3 Expressive Alert Speedometer Shape:
+    // Fluidly morphs from circle (normal) into soft Reuleaux warning shield (over limit)
+    val morphProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (over) 1f else 0f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "cornerTS"
+        label = "speedMorph"
     )
-    val cornerBE by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (over) 12.dp else 52.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "cornerBE"
-    )
-    val cornerOther by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (over) 28.dp else 52.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "cornerOther"
-    )
-    val speedShape = RoundedCornerShape(
-        topStart = cornerTS,
-        topEnd = cornerOther,
-        bottomEnd = cornerBE,
-        bottomStart = cornerOther
-    )
+    val speedShape = alertShieldShape(morphProgress)
 
     val speedBg by androidx.compose.animation.animateColorAsState(
         targetValue = if (over) androidx.compose.ui.graphics.lerp(c.surface, Bad, 0.14f) else c.surface,
@@ -1772,7 +1891,8 @@ private fun SpeedRing(engine: NavEngine, show: Boolean, k: Double) {
                 )
                 .clip(speedShape)
                 .background(speedBg)
-                .border(speedBorderWidth, speedBorderColor, speedShape),
+                .border(speedBorderWidth, speedBorderColor, speedShape)
+                .clickable { testOver = !testOver },
             contentAlignment = Alignment.Center
         ) {
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(8.dp)) {
@@ -1810,6 +1930,15 @@ private fun SpeedRing(engine: NavEngine, show: Boolean, k: Double) {
         if (lim != null) Box(
             Modifier.align(if (!show) Alignment.Center else if (signRight) Alignment.TopEnd else Alignment.TopStart)
                 .offset(x = if (!show) 0.dp else if (signRight) 30.dp else (-30).dp, y = if (show) (-18).dp else 0.dp)
+                .clickable {
+                    testNextLimit = if (testNextLimit == null) {
+                        Pair(35.0 / 2.23694, 152.4)
+                    } else if (testNextLimit!!.first < 20.0) {
+                        Pair(65.0 / 2.23694, 304.8)
+                    } else {
+                        null
+                    }
+                }
         ) {
             // (the upright North American board is narrower than the round sign, so it gets a little more height to stay readable)
             SpeedLimitSign(engine, if (!show) 70.dp else if (engine.limitSignStyle != "round") 58.dp else 50.dp)
