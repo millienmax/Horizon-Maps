@@ -332,7 +332,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         // Settings > sizes > map buttons: scales the button column on the right
         val mainButtonScale = engine.prefs.i(PreferenceKeys.MAIN_BUTTON_SIZE, 100).coerceIn(70, 150) / 100f
         val narrowEndPadding by animateDpAsState(
-            targetValue = if (searchActive) 0.dp else (52.dp * mainButtonScale + 10.dp),
+            targetValue = if (searchActive || (routing && engine.following)) 0.dp else (52.dp * mainButtonScale + 10.dp),
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMediumLow
@@ -357,7 +357,12 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         if (engine.chain == null && !engine.chainBusy) Column(
             Modifier
                 .align(side(Alignment.TopStart))
-                .padding(16.dp)
+                .padding(
+                    start = if (routing && narrow) 8.dp else 16.dp,
+                    end = if (routing && narrow) 8.dp else 16.dp,
+                    top = if (routing && narrow) 8.dp else 16.dp,
+                    bottom = 16.dp
+                )
                 .then(if (narrow) Modifier.fillMaxWidth().sides(end = narrowEndPadding) else Modifier.width(if (searchActive) 440.dp else 380.dp))
                 .onGloballyPositioned { report(0, it.boundsInParent()) }
                 .zIndex(if (searchActive) 10f else if (engine.itineraryOpen) 2f else 0f),
@@ -474,23 +479,23 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             if (showNavDetails) {
                 railItems.add(@Composable { ImmCompass(engine) })
                 railItems.add(@Composable { ImmIcon(Icons.Rounded.Layers, { sheet = !sheet; if (sheet) soundSheet = false }, active = sheet, desc = L.t("Map options")) })
+                // Quick sound control: tap cycles All/Alerts/Mute, long-press opens sound sheet
+                railItems.add(@Composable {
+                    val soundTint = when (engine.soundMode) {
+                        0 -> c.text
+                        1 -> Color(0xFFF29900)
+                        else -> Bad
+                    }
+                    ImmCircle(
+                        onClick = { engine.cycleSound() },
+                        onLongClick = { soundSheet = !soundSheet; if (soundSheet) sheet = false },
+                        size = 52.dp,
+                        active = soundSheet
+                    ) {
+                        Icon(soundIcon(engine.soundMode), L.t("Sound"), tint = if (soundSheet) Color.White else soundTint, modifier = Modifier.size(24.dp))
+                    }
+                })
             }
-            // Quick sound control (always visible): tap cycles All/Alerts/Mute, long-press opens sound sheet
-            railItems.add(@Composable {
-                val soundTint = when (engine.soundMode) {
-                    0 -> c.text
-                    1 -> Color(0xFFF29900)
-                    else -> Bad
-                }
-                ImmCircle(
-                    onClick = { engine.cycleSound() },
-                    onLongClick = { soundSheet = !soundSheet; if (soundSheet) sheet = false },
-                    size = 52.dp,
-                    active = soundSheet
-                ) {
-                    Icon(soundIcon(engine.soundMode), L.t("Sound"), tint = if (soundSheet) Color.White else soundTint, modifier = Modifier.size(24.dp))
-                }
-            })
             // the demo drive: play to start it; while it plays, its speed (tap for 1x / 2x / 4x), skip to the next turn, and stop
             if (engine.simMode != 0) {
                 railItems.add(@Composable {
@@ -504,7 +509,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             var stopped by remember { mutableStateOf(true) }
             val spNow = engine.fix?.speed ?: 0.0
             androidx.compose.runtime.SideEffect { if (spNow > 3.0) stopped = false else if (spNow < 1.0) stopped = true }
-            val showZoom = stopped || !engine.following || kotlin.math.abs(engine.zoomOffset) > 0.01
+            val showZoom = if (routing) !engine.following else (stopped || !engine.following || kotlin.math.abs(engine.zoomOffset) > 0.01)
             val unit = 52.dp * mainButtonScale
             // the top of the speedometer (measured; a fair guess until it has been laid out)
             val speedTop = if (speedPos != "bottom") maxHeight else if (speedTopPx >= 0) with(dens) { speedTopPx.toDp() } else maxHeight - 190.dp
@@ -592,10 +597,11 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                         if (!zoomUnder && mir) zoom()
                     }
                 }
+                val railPaddingTop = 16.dp
                 Box(
                     Modifier
                         .align(side(Alignment.TopEnd))
-                        .padding(16.dp)
+                        .padding(start = 16.dp, end = 16.dp, top = railPaddingTop, bottom = 16.dp)
                         .onGloballyPositioned { report(2, it.boundsInParent()); buttonsWPx = it.size.width }
                 ) {
                     panelAndZoom()
@@ -653,10 +659,18 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             val tripBaseDensity = LocalDensity.current
             val tripCardScale = engine.prefs.i(PreferenceKeys.MAIN_CARD_SIZE, 100).coerceIn(70, 150) / 100f
             val tripAlign = when (tripAt) { "centre" -> Alignment.BottomCenter; "right" -> Alignment.BottomEnd; "left" -> Alignment.BottomStart; else -> side(Alignment.BottomStart) }
-            Box(Modifier.align(tripAlign).then(if (narrow) Modifier.fillMaxWidth().sides(end = 16.dp) else Modifier).onSizeChanged { tripPx = it.height }
+            Box(Modifier.align(tripAlign).then(if (narrow) Modifier.fillMaxWidth() else Modifier).onSizeChanged { tripPx = it.height }
                 .onGloballyPositioned { report(1, it.boundsInParent()) }) {
                 CompositionLocalProvider(LocalDensity provides Density(tripBaseDensity.density * tripCardScale, tripBaseDensity.fontScale)) {
-                    TripArea(engine, shareEta, narrow, voice, alignEnd = if (narrow || tripAt.isEmpty()) mir else tripAt == "right", centred = tripAt == "centre")
+                    TripArea(
+                        engine,
+                        shareEta,
+                        narrow,
+                        voice,
+                        alignEnd = if (narrow || tripAt.isEmpty()) mir else tripAt == "right",
+                        centred = tripAt == "centre",
+                        onSoundSheet = { soundSheet = !soundSheet; if (soundSheet) sheet = false }
+                    )
                 }
             }
         }
@@ -1420,7 +1434,7 @@ private fun WideTiles(cols: Int, tiles: List<TileSpec>, compact: Boolean = false
 
 /** Bottom left: hazard badges, then the trip card with the route bar, arrival, time and distance left, and the trip buttons. */
 @Composable
-private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = false, voice: () -> Unit = {}, alignEnd: Boolean = engine.layoutMirrored, centred: Boolean = false) {
+private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = false, voice: () -> Unit = {}, alignEnd: Boolean = engine.layoutMirrored, centred: Boolean = false, onSoundSheet: () -> Unit = {}) {
     val c = LocalVw.current
     val inc = engine.incidentAhead
     val cam = engine.cameraDist
@@ -1428,7 +1442,7 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
     val radarOn = engine.prefs.b(PreferenceKeys.HAZARDRADAR, false)
     if (inc == null && cam == null && eta == null && (!radarOn || engine.radar.isEmpty())) return
     val mir = alignEnd
-    Column(Modifier.padding(start = if (mir || centred) 0.dp else 16.dp, end = if (mir && !centred) 16.dp else 0.dp, bottom = 16.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp),
+    Column(Modifier.padding(start = if (narrow || mir || centred) 0.dp else 16.dp, end = if (narrow || !mir || centred) 0.dp else 16.dp, bottom = 16.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalAlignment = if (centred) Alignment.CenterHorizontally else if (mir) Alignment.End else Alignment.Start) {
         // hazard radar: the next two miles at a glance (replaces the separate camera and incident badges)
         if (radarOn) HazardRadar(engine)
@@ -1475,12 +1489,26 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                     ImmStat(Geo.fmtDist(e.dist, engine.imperial), L.t("to go"), c.text)
                     if (evStat) ImmStat("$evPct%", L.t("battery at arrival"), evCol)
                 }
+                val soundTint = when (engine.soundMode) {
+                    0 -> c.text
+                    1 -> Color(0xFFF29900)
+                    else -> Bad
+                }
+                val soundBtn: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { iconSize ->
+                    Box(
+                        Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick(onLongClick = onSoundSheet) { engine.cycleSound() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(soundIcon(engine.soundMode), L.t("Sound"), tint = soundTint, modifier = Modifier.size(iconSize))
+                    }
+                }
                 val buttons: @Composable () -> Unit = {
                     // electric: chargers along the route from here
                     if (evPct != null) Box(
                         Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.loadNearby("charging", false) },
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.EvStation, L.t("Chargers ahead"), tint = Good, modifier = Modifier.size(22.dp)) }
+                    soundBtn(22.dp)
                     Box(
                         Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.findAlternatives() },
                         contentAlignment = Alignment.Center
@@ -1505,8 +1533,8 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                     // all fit (an electric car adds a fourth figure and a fifth button), the buttons go on a line under the figures:
                     // squeezed onto one line the figures ran into each other ("21 min14:1216 km75")
                     val nStats = if (evStat) 4 else 3
-                    val nButtons = (if (evPct != null) 1 else 0) + 2
-                    val oneLine = maxWidth >= (nStats * 74 + nButtons * 44 + 32).dp
+                    val nButtons = (if (evPct != null) 1 else 0) + 3
+                    val oneLine = maxWidth >= (nStats * 70 + nButtons * 44 + 24).dp
                     val figures: @Composable (Modifier) -> Unit = { m ->
                         Row(m, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             ImmStat(Geo.fmtDur(e.secs), if (e.delayMin >= 1) L.t("+{0} min", e.delayMin) else L.t("time left"), dc, compact = true)
@@ -1521,6 +1549,7 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                                 Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.loadNearby("charging", false) },
                                 contentAlignment = Alignment.Center
                             ) { Icon(Icons.Rounded.EvStation, L.t("Chargers ahead"), tint = Good, modifier = Modifier.size(20.dp)) }
+                            soundBtn(20.dp)
                             Box(
                                 Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.findAlternatives() },
                                 contentAlignment = Alignment.Center
@@ -1615,6 +1644,39 @@ private fun SpeedBlock(engine: NavEngine) {
     if (lim == null && !show) return
     val k = if (engine.imperial) 2.23694 else 3.6
     if (engine.prefs.b(PreferenceKeys.SPEEDRING, true)) { SpeedRing(engine, show, k); return }
+    val sp = engine.fix?.speed ?: 0.0
+    val ratio = if (lim != null && lim > 0 && !engine.limitEstimated) (sp / lim).toFloat() else 0f
+    val over = engine.overLimit || ratio > 1.04f
+    val cornerTS by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 8.dp else 20.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "cornerTSBlock"
+    )
+    val cornerBE by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 8.dp else 20.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "cornerBEBlock"
+    )
+    val cornerOther by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 20.dp else 20.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "cornerOtherBlock"
+    )
+    val blockShape = RoundedCornerShape(cornerTS, cornerOther, cornerBE, cornerOther)
+    val blockBg by androidx.compose.animation.animateColorAsState(
+        targetValue = if (over) androidx.compose.ui.graphics.lerp(c.surface, Bad, 0.14f) else c.surface,
+        animationSpec = androidx.compose.animation.core.tween(300),
+        label = "blockBg"
+    )
+    val blockBorderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (over) Bad.copy(alpha = 0.85f) else c.line.copy(alpha = 0.5f),
+        animationSpec = androidx.compose.animation.core.tween(300),
+        label = "blockBorderColor"
+    )
+    val blockBorderWidth by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 2.dp else 1.dp,
+        label = "blockBorderWidth"
+    )
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         // Keep the speed cluster in the same screen position, but mirror the sign's
         // relationship to the speed readout for left-hand-drive layouts.
@@ -1622,10 +1684,10 @@ private fun SpeedBlock(engine: NavEngine) {
         if (show) Column(
             Modifier
                 .width(78.dp)
-                .shadow(6.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
-                .clip(RoundedCornerShape(20.dp))
-                .background(c.surface)
-                .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .shadow(if (over) 8.dp else 6.dp, blockShape, ambientColor = if (over) Bad.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.12f), spotColor = if (over) Bad.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f))
+                .clip(blockShape)
+                .background(blockBg)
+                .border(blockBorderWidth, blockBorderColor, blockShape)
                 .padding(vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -1649,20 +1711,65 @@ private fun SpeedRing(engine: NavEngine, show: Boolean, k: Double) {
     val target = (sp / full).toFloat().coerceIn(0f, 1f)
     val frac by androidx.compose.animation.core.animateFloatAsState(target, androidx.compose.animation.core.tween(350), label = "ring")
     val ratio = if (lim != null && lim > 0 && !engine.limitEstimated) (sp / lim).toFloat() else 0f
+    val over = engine.overLimit || ratio > 1.04f
     val col = when {
-        engine.overLimit || ratio > 1.04f -> Bad
+        over -> Bad
         ratio >= 0.9f -> androidx.compose.ui.graphics.lerp(Warn, Bad, ((ratio - 0.9f) / 0.14f).coerceIn(0f, 1f))
         else -> c.accent
     }
     val arcCol by androidx.compose.animation.animateColorAsState(col, androidx.compose.animation.core.tween(400), label = "ringCol")
+
+    // MD3 Expressive Shape-Shifting Corner Radii
+    val cornerTS by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 12.dp else 52.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "cornerTS"
+    )
+    val cornerBE by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 12.dp else 52.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "cornerBE"
+    )
+    val cornerOther by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 28.dp else 52.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "cornerOther"
+    )
+    val speedShape = RoundedCornerShape(
+        topStart = cornerTS,
+        topEnd = cornerOther,
+        bottomEnd = cornerBE,
+        bottomStart = cornerOther
+    )
+
+    val speedBg by androidx.compose.animation.animateColorAsState(
+        targetValue = if (over) androidx.compose.ui.graphics.lerp(c.surface, Bad, 0.14f) else c.surface,
+        animationSpec = androidx.compose.animation.core.tween(300),
+        label = "speedBg"
+    )
+    val speedBorderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (over) Bad.copy(alpha = 0.85f) else c.line.copy(alpha = 0.5f),
+        animationSpec = androidx.compose.animation.core.tween(300),
+        label = "speedBorderColor"
+    )
+    val speedBorderWidth by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (over) 2.dp else 1.dp,
+        label = "speedBorderWidth"
+    )
+
     Box(contentAlignment = Alignment.Center) {
         if (show) Box(
             Modifier
                 .size(104.dp)
-                .shadow(6.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
-                .clip(CircleShape)
-                .background(c.surface)
-                .border(1.dp, c.line.copy(alpha = 0.5f), CircleShape),
+                .shadow(
+                    elevation = if (over) 8.dp else 6.dp,
+                    shape = speedShape,
+                    ambientColor = if (over) Bad.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.12f),
+                    spotColor = if (over) Bad.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.18f)
+                )
+                .clip(speedShape)
+                .background(speedBg)
+                .border(speedBorderWidth, speedBorderColor, speedShape),
             contentAlignment = Alignment.Center
         ) {
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(8.dp)) {

@@ -321,7 +321,7 @@ fun App(prefs: Prefs, engine: NavEngine, map: MapBinding) { SafeArea(prefs) { Te
                 if (curMsg != null) lastMsg.value = curMsg
                 val routing = engine.route != null && !engine.previewing
                 val toastAlign = if (settings || routing) Alignment.BottomCenter else Alignment.TopCenter
-                val toastPaddingBottom = if (routing) 135.dp else 18.dp
+                val toastPaddingBottom = if (routing) 145.dp else 18.dp
                 val toastPaddingTop = if (routing) 0.dp else 12.dp
                 androidx.compose.animation.AnimatedVisibility(
                     visible = curMsg != null,
