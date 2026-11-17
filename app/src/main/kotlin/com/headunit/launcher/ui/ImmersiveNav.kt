@@ -318,6 +318,8 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         var speedTopPx by remember { mutableStateOf(-1) }
         // the map buttons' width down the speed's side (for the speed display set to Middle or Top, which sits just inside them)
         var buttonsWPx by remember { mutableStateOf(0) }
+        var navCardBottomPx by remember { mutableStateOf(0) }
+        val navCardBottomDp = with(dens) { navCardBottomPx.toDp() }
         // Settings > Screen & sizes > Speed position: bottom (as it always was), middle or top of the side away from the cards.
         // Top falls back to middle on narrow screens, where the turn card spans the top
         val speedPos = engine.prefs.s(PreferenceKeys.SPEED_POS, "bottom").let { if (it == "top" && narrow) "middle" else it }
@@ -336,7 +338,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         // Settings > sizes > map buttons: scales the button column on the right
         val mainButtonScale = engine.prefs.i(PreferenceKeys.MAIN_BUTTON_SIZE, 100).coerceIn(70, 150) / 100f
         val narrowEndPadding by animateDpAsState(
-            targetValue = if (searchActive || (routing && engine.following)) 0.dp else (52.dp * mainButtonScale + 10.dp),
+            targetValue = if (routing || searchActive) 0.dp else (52.dp * mainButtonScale + 10.dp),
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMediumLow
@@ -362,13 +364,13 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             Modifier
                 .align(side(Alignment.TopStart))
                 .padding(
-                    start = if (routing && narrow) 8.dp else 16.dp,
-                    end = if (routing && narrow) 8.dp else 16.dp,
-                    top = if (routing && narrow) 8.dp else 16.dp,
-                    bottom = 16.dp
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 16.dp,
+                    bottom = 10.dp
                 )
                 .then(if (narrow) Modifier.fillMaxWidth().sides(end = narrowEndPadding) else Modifier.width(if (searchActive) 440.dp else 380.dp))
-                .onGloballyPositioned { report(0, it.boundsInParent()) }
+                .onGloballyPositioned { report(0, it.boundsInParent()); navCardBottomPx = it.boundsInParent().bottom.toInt() }
                 .zIndex(if (searchActive) 10f else if (engine.itineraryOpen) 2f else 0f),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -600,7 +602,7 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                         if (!zoomUnder && mir) zoom()
                     }
                 }
-                val railPaddingTop = 16.dp
+                val railPaddingTop = if (routing && narrow && navCardBottomDp > 0.dp) navCardBottomDp + 10.dp else 16.dp
                 Box(
                     Modifier
                         .align(side(Alignment.TopEnd))
@@ -1455,7 +1457,7 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
         }
         // Destination parking suggestions (docked right above the trip card)
         if (engine.parkingNear.isNotEmpty()) {
-            ParkingCard(engine, Modifier.padding(horizontal = if (narrow) 8.dp else 0.dp))
+            ParkingCard(engine, Modifier.padding(horizontal = if (narrow) 16.dp else 0.dp))
         }
         eta?.let { e ->
             val dc = if (e.delayMin >= 10) Bad else if (e.delayMin >= 1) Warn else Good
@@ -1468,7 +1470,7 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
             val rowW = with(dens) { rowPx.toDp() }
             TextSides { Column(
                 Modifier
-                    .then(if (narrow) Modifier.fillMaxWidth().padding(horizontal = 8.dp) else Modifier)
+                    .then(if (narrow) Modifier.fillMaxWidth().padding(horizontal = 16.dp) else Modifier)
                     .shadow(
                         elevation = 6.dp,
                         shape = shape,
@@ -1972,7 +1974,6 @@ internal fun ImmTurnCard(
     val turnBg = if (c.dark) androidx.compose.ui.graphics.lerp(navGreenDark, Color(0xFF107D57), 0.15f * glow) else androidx.compose.ui.graphics.lerp(navGreenLight, navGreenDark, 0.15f * glow)
     Column(
         Modifier.fillMaxWidth()
-            .graphicsLayer { scaleX = grow; scaleY = grow; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f) }
             .shadow(
                 elevation = (if (compact) 4f else 6f + 4f * glow).dp,
                 shape = shape,
