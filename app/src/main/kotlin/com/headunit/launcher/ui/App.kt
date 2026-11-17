@@ -319,9 +319,11 @@ fun App(prefs: Prefs, engine: NavEngine, map: MapBinding) { SafeArea(prefs) { Te
                 val curMsg = engine.message
                 val lastMsg = remember { mutableStateOf(curMsg) }
                 if (curMsg != null) lastMsg.value = curMsg
+                val routing = engine.route != null && !engine.previewing
+                val toastPaddingTop = if (routing) 180.dp else 12.dp
                 androidx.compose.animation.AnimatedVisibility(
                     visible = curMsg != null,
-                    modifier = Modifier.align(if (settings) Alignment.BottomCenter else Alignment.TopCenter).padding(top = 12.dp, bottom = 18.dp),
+                    modifier = Modifier.align(if (settings) Alignment.BottomCenter else Alignment.TopCenter).padding(top = toastPaddingTop, bottom = 18.dp),
                     enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)) + androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(240)) { if (settings) it / 2 else -it / 2 },
                     exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)),
                 ) {

@@ -1429,18 +1429,32 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
         }
         eta?.let { e ->
             val dc = if (e.delayMin >= 10) Bad else if (e.delayMin >= 1) Warn else Good
-            val shape = RoundedCornerShape(22.dp)
+            val shape = RoundedCornerShape(24.dp)
+            val btnShape = RoundedCornerShape(14.dp)
             // landscape: the card is only as wide as its contents (figures, then the buttons close by), and the route bar matches that width.
             // portrait: full width, with the buttons under the figures.
             val dens = androidx.compose.ui.platform.LocalDensity.current
             var rowPx by remember { mutableStateOf(0) }
             val rowW = with(dens) { rowPx.toDp() }
-            TextSides { Column(Modifier.then(if (narrow) Modifier.fillMaxWidth() else Modifier).panel(10.dp, shape, c.surface).animateContentSize()) {
+            TextSides { Column(
+                Modifier
+                    .then(if (narrow) Modifier.fillMaxWidth().padding(horizontal = 16.dp) else Modifier)
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = shape,
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.18f)
+                    )
+                    .clip(shape)
+                    .background(c.surface)
+                    .border(1.dp, c.line.copy(alpha = 0.65f), shape)
+                    .animateContentSize()
+            ) {
                 val barMod = if (narrow) Modifier.fillMaxWidth() else Modifier.width(rowW)
                 // the route bar across the top of the card, with room to breathe
                 if (engine.showRouteBar && (narrow || rowPx > 0)) {
-                    RouteBar(engine, barMod.padding(start = if (narrow) 16.dp else 18.dp, end = if (narrow) 16.dp else 18.dp, top = if (narrow) 7.dp else 9.dp, bottom = if (narrow) 2.dp else 4.dp))
-                    Box(barMod.padding(horizontal = 18.dp).height(1.dp).background(c.line))
+                    RouteBar(engine, barMod.padding(start = if (narrow) 16.dp else 18.dp, end = if (narrow) 16.dp else 18.dp, top = if (narrow) 10.dp else 11.dp, bottom = if (narrow) 3.dp else 4.dp))
+                    Box(barMod.padding(horizontal = 18.dp).height(1.dp).background(c.line.copy(alpha = 0.5f)))
                 }
                 // electric: roughly how much battery you'll arrive with (amber under 20%, red under 10%)
                 val evPct = engine.evArrivalPct()
@@ -1456,9 +1470,15 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                     // electric: chargers along the route from here
                     // (voice, sound and stops moved off the card: sound is a big button at the top right, voice and stops are in Map
                     // options > This trip)
-                    if (evPct != null) ImmCircle({ engine.loadNearby("charging", false) }, 44.dp) { Icon(Icons.Rounded.EvStation, L.t("Chargers ahead"), tint = Good, modifier = Modifier.size(22.dp)) }
-                    Box(Modifier.size(44.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Bad).pressClick { engine.endRoute() }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Close, L.t("End route"), tint = Color.White, modifier = Modifier.size(23.dp))
+                    if (evPct != null) Box(
+                        Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.loadNearby("charging", false) },
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Rounded.EvStation, L.t("Chargers ahead"), tint = Good, modifier = Modifier.size(22.dp)) }
+                    Box(
+                        Modifier.size(44.dp).clip(btnShape).background(Bad).pressClick { engine.endRoute() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.Close, L.t("End route"), tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
                 if (!narrow) Row(
@@ -1473,7 +1493,7 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                     // squeezed onto one line the figures ran into each other ("21 min14:1216 km75")
                     val nStats = if (evStat) 4 else 3
                     val nButtons = if (evPct != null) 2 else 1
-                    val oneLine = maxWidth >= (nStats * 74 + nButtons * 42 + 30).dp
+                    val oneLine = maxWidth >= (nStats * 74 + nButtons * 44 + 32).dp
                     val figures: @Composable (Modifier) -> Unit = { m ->
                         Row(m, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             ImmStat(Geo.fmtDur(e.secs), if (e.delayMin >= 1) L.t("+{0} min", e.delayMin) else L.t("time left"), dc, compact = true)
@@ -1483,17 +1503,23 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                         }
                     }
                     val smallButtons: @Composable (Modifier) -> Unit = { m ->
-                        Row(m, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            if (evPct != null) ImmCircle({ engine.loadNearby("charging", false) }, 40.dp) { Icon(Icons.Rounded.EvStation, L.t("Chargers ahead"), tint = Good, modifier = Modifier.size(20.dp)) }
-                            Box(Modifier.size(40.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Bad).pressClick { engine.endRoute() }, contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Close, L.t("End route"), tint = Color.White, modifier = Modifier.size(21.dp))
+                        Row(m, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (evPct != null) Box(
+                                Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.loadNearby("charging", false) },
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Rounded.EvStation, L.t("Chargers ahead"), tint = Good, modifier = Modifier.size(20.dp)) }
+                            Box(
+                                Modifier.size(44.dp).clip(btnShape).background(Bad).pressClick { engine.endRoute() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.Close, L.t("End route"), tint = Color.White, modifier = Modifier.size(22.dp))
                             }
                         }
                     }
-                    if (oneLine) Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (oneLine) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                         figures(Modifier.weight(1f))
                         smallButtons(Modifier.padding(start = 12.dp))
-                    } else Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 6.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    } else Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         figures(Modifier.fillMaxWidth().padding(end = 4.dp))
                         smallButtons(Modifier.align(Alignment.End))
                     }
@@ -1538,7 +1564,12 @@ private fun SpeedWithNext(engine: NavEngine) {
     val ringSign = engine.prefs.b(PreferenceKeys.SPEEDRING, true) && engine.speedLimit != null && engine.prefs.b(PreferenceKeys.MAPSPEED, true)
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(if (ringSign) 26.dp else 6.dp)) {
         Row(
-            Modifier.panel(6.dp, RoundedCornerShape(20.dp), c.surface).padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+            Modifier
+                .shadow(6.dp, RoundedCornerShape(18.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
+                .clip(RoundedCornerShape(18.dp))
+                .background(c.surface)
+                .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                .padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val num = "${(Math.round(nx.first * k / 5.0) * 5)}"
@@ -1570,7 +1601,13 @@ private fun SpeedBlock(engine: NavEngine) {
         // relationship to the speed readout for left-hand-drive layouts.
         if (show && engine.mirrored && !engine.isCar && lim != null) SpeedLimitSign(engine, 70.dp)
         if (show) Column(
-            Modifier.width(78.dp).panel(8.dp, RoundedCornerShape(24.dp), c.surface).padding(vertical = 8.dp),
+            Modifier
+                .width(78.dp)
+                .shadow(6.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
+                .clip(RoundedCornerShape(20.dp))
+                .background(c.surface)
+                .border(1.dp, c.line.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .padding(vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text("${Math.round((engine.fix?.speed ?: 0.0) * k)}", color = speedTint(engine) ?: c.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -1600,7 +1637,15 @@ private fun SpeedRing(engine: NavEngine, show: Boolean, k: Double) {
     }
     val arcCol by androidx.compose.animation.animateColorAsState(col, androidx.compose.animation.core.tween(400), label = "ringCol")
     Box(contentAlignment = Alignment.Center) {
-        if (show) Box(Modifier.size(104.dp).panel(10.dp, CircleShape, c.surface), contentAlignment = Alignment.Center) {
+        if (show) Box(
+            Modifier
+                .size(104.dp)
+                .shadow(6.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
+                .clip(CircleShape)
+                .background(c.surface)
+                .border(1.dp, c.line.copy(alpha = 0.5f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(8.dp)) {
                 val sw = 7.dp.toPx()
                 val inset = sw / 2 + 4.dp.toPx()
@@ -1653,7 +1698,7 @@ internal fun ImmTurnCard(
     /** Extra row along the bottom of the card (Android Auto puts the hazards ahead there). */
     footer: (@Composable () -> Unit)? = null,
 ) { TextSides {
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(24.dp)
     val c = LocalVw.current
     val frac = ((450.0 - t.dist) / 450.0).coerceIn(0.0, 1.0).toFloat()
     // living card: it grows a touch and starts to glow as the turn comes up, and pulses in the last 80 m
@@ -1669,14 +1714,15 @@ internal fun ImmTurnCard(
         Modifier.fillMaxWidth()
             .graphicsLayer { scaleX = grow; scaleY = grow; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f) }
             .shadow(
-                elevation = (if (compact) 4f else 8f + 6f * glow).dp,
+                elevation = (if (compact) 4f else 6f + 4f * glow).dp,
                 shape = shape,
                 clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.22f),
-                spotColor = Color.Black.copy(alpha = 0.30f)
+                ambientColor = Color.Black.copy(alpha = 0.18f),
+                spotColor = Color.Black.copy(alpha = 0.28f)
             )
             .clip(shape)
             .background(turnBg)
+            .border(1.dp, Color.White.copy(alpha = 0.16f), shape)
             .drawWithContent {
                 drawContent()
                 val pv = pulse.value
@@ -1712,7 +1758,13 @@ internal fun ImmTurnCard(
             }
             // the turn straight after, as a small arrow (the "Then" line below is used instead when that style is chosen)
             if (thenIcon && t.thenManeuver != null) Column(Modifier.padding(start = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(TealDeep), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.25f))
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
                     ManeuverArrow(t.thenManeuver, Geo.maneuverAngle(t.thenManeuver), Modifier.size(28.dp), roundaboutExit = t.thenExit, roundaboutClockwise = !engine.mirrored)
                 }
                 Text("then", color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 2.dp))
@@ -1764,13 +1816,22 @@ internal fun ImmTurnCard(
             // (not in Android Auto: the big lane picture made the card grow to fill much of a car screen as soon as a junction came up)
             val hero = !car && engine.prefs.s(PreferenceKeys.LANE_STYLE, "hero") == "hero" && ls.lanes.size >= 2 && t.dist < 900.0
             if (hero) FixedSides { LaneHero(ls, t.maneuver, if (car) null else t.laneAdvice) }
-            else Box(Modifier.fillMaxWidth().background(TealDeep).padding(vertical = 4.dp), contentAlignment = Alignment.Center) { FixedSides { LaneRow(ls, t.maneuver, t.dist < 400.0) } }
+            else {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f)))
+                Box(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.20f)).padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                    FixedSides { LaneRow(ls, t.maneuver, t.dist < 400.0) }
+                }
+            }
         }
         val heroShown = !car && engine.prefs.b(PreferenceKeys.LANE_STRIP, true) && engine.prefs.s(PreferenceKeys.LANE_STYLE, "hero") == "hero" && (t.lanes?.lanes?.size ?: 0) >= 2 && t.dist < 900.0
-        if (!compact && !heroShown && !(car && t.lanes != null && engine.prefs.b(PreferenceKeys.LANE_STRIP, true))) t.laneAdvice?.let { Text(it, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().background(TealDeep).padding(horizontal = 18.dp, vertical = 6.dp)) }
+        if (!compact && !heroShown && !(car && t.lanes != null && engine.prefs.b(PreferenceKeys.LANE_STRIP, true))) t.laneAdvice?.let {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f)))
+            Text(it, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.20f)).padding(horizontal = 18.dp, vertical = 6.dp))
+        }
         // (the "then" line stays on a small car screen too)
         if ((!compact || car) && t.thenManeuver != null && !thenIcon) {
-            Row(Modifier.fillMaxWidth().background(TealDeep).padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f)))
+            Row(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.20f)).padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 ManeuverArrow(t.thenManeuver, Geo.maneuverAngle(t.thenManeuver), Modifier.size(22.dp), roundaboutExit = t.thenExit, roundaboutClockwise = !engine.mirrored)
                 Text(t.thenText, color = Color.White.copy(alpha = 0.92f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
             }
@@ -2362,9 +2423,17 @@ private fun ImmQuick(engine: NavEngine, @Suppress("UNUSED_PARAMETER") showSaved:
     val c = LocalVw.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ParkedCard(engine)
+        val quickBg = if (c.dark) Color(0xFF00497D) else Color(0xFF0061A4)
+        val cardShape = RoundedCornerShape(24.dp)
         engine.resume?.let { rp ->
             Row(
-                Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).background(TealDeep).clickable { engine.startRoute(rp) }.padding(horizontal = 16.dp, vertical = 13.dp),
+                Modifier.fillMaxWidth()
+                    .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.22f))
+                    .clip(cardShape)
+                    .background(quickBg)
+                    .border(1.dp, Color.White.copy(alpha = 0.16f), cardShape)
+                    .clickable { engine.startRoute(rp) }
+                    .padding(horizontal = 16.dp, vertical = 13.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Rounded.Route, null, tint = Color.White, modifier = Modifier.size(26.dp))
@@ -2379,7 +2448,13 @@ private fun ImmQuick(engine: NavEngine, @Suppress("UNUSED_PARAMETER") showSaved:
         LaunchedEffect(engine.fix != null) { while (true) { engine.refreshPrediction(); delay(60_000) } }
         val pr = engine.prediction?.takeIf { engine.prefs.b(PreferenceKeys.PREDICT, true) }
         if (pr != null) Row(
-            Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).background(Teal).clickable { engine.startRoute(pr.place) }.padding(horizontal = 16.dp, vertical = 13.dp),
+            Modifier.fillMaxWidth()
+                .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.22f))
+                .clip(cardShape)
+                .background(quickBg)
+                .border(1.dp, Color.White.copy(alpha = 0.16f), cardShape)
+                .clickable { engine.startRoute(pr.place) }
+                .padding(horizontal = 16.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(when (pr.title) { "Home" -> Icons.Rounded.Home; "Work" -> Icons.Rounded.Work; else -> Icons.Rounded.History }, null, tint = Color.White, modifier = Modifier.size(26.dp))
@@ -2394,7 +2469,13 @@ private fun ImmQuick(engine: NavEngine, @Suppress("UNUSED_PARAMETER") showSaved:
         // (Settings "Suggest where you're going" switches this one off too: it used to stay on regardless, GitHub #73)
         val suggestion = remember { engine.habits.suggest(System.currentTimeMillis()) }?.takeIf { engine.prefs.b(PreferenceKeys.PREDICT, true) }
         if (pr == null && suggestion != null) Row(
-            Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).background(Teal).clickable { engine.startRoute(suggestion) }.padding(horizontal = 16.dp, vertical = 13.dp),
+            Modifier.fillMaxWidth()
+                .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.22f))
+                .clip(cardShape)
+                .background(quickBg)
+                .border(1.dp, Color.White.copy(alpha = 0.16f), cardShape)
+                .clickable { engine.startRoute(suggestion) }
+                .padding(horizontal = 16.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Rounded.History, null, tint = Color.White, modifier = Modifier.size(26.dp))
@@ -2416,8 +2497,9 @@ private fun ImmQuick(engine: NavEngine, @Suppress("UNUSED_PARAMETER") showSaved:
 private fun ItineraryCard(engine: NavEngine) {
     @Suppress("UNUSED_VARIABLE") val tick = engine.turn   // read so the list moves along as you drive
     val rows = engine.itinerary()
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(24.dp)
     val c = LocalVw.current
+    val turnBg = if (c.dark) Color(0xFF00497D) else Color(0xFF0061A4)
     var picked by remember { mutableStateOf(-1) }
     var touched by remember { mutableStateOf(0) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -2425,19 +2507,33 @@ private fun ItineraryCard(engine: NavEngine) {
     LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) touched++ }
     LaunchedEffect(touched, listState.isScrollInProgress) { if (!listState.isScrollInProgress) { delay(5_000); engine.closeItinerary() } }
     LaunchedEffect(rows.isEmpty()) { if (rows.isEmpty()) engine.closeItinerary() }
-    Column(Modifier.fillMaxWidth().shadow(12.dp, shape).clip(shape).background(Teal).border(1.5.dp, Color.White.copy(alpha = 0.18f), shape)) {
-        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(
+        Modifier.fillMaxWidth()
+            .shadow(6.dp, shape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.28f))
+            .clip(shape)
+            .background(turnBg)
+            .border(1.dp, Color.White.copy(alpha = 0.16f), shape)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(L.t("Your route"), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 val e = engine.eta
                 Text("${rows.size} ${if (rows.size == 1) "step" else "steps"}" + (if (e != null) " · " + Geo.fmtDist(e.dist, engine.imperial) + L.t(" · arrive ") + e.arrive else ""),
                     color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
             }
-            Box(Modifier.size(44.dp).clip(CircleShape).background(TealDeep).clickable { engine.closeItinerary() }, contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.22f))
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+                    .clickable { engine.closeItinerary() },
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(Icons.Rounded.Close, L.t("Close"), tint = Color.White, modifier = Modifier.size(22.dp))
             }
         }
-        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp).background(TealDeep), state = listState) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f)))
+        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp).background(Color.Black.copy(alpha = 0.20f)), state = listState) {
             items(rows, key = { it.index }) { row ->
                 val sel = picked == row.index
                 Column(Modifier.fillMaxWidth().background(if (sel) Color.White.copy(alpha = 0.10f) else Color.Transparent)
@@ -2466,10 +2562,18 @@ private fun RoutesBox(engine: NavEngine) {
     val c = LocalVw.current
     val eta = engine.eta
     val alts = engine.liveAlts
-    Column(Modifier.width(340.dp).panel(10.dp, RoundedCornerShape(22.dp), c.surface).padding(vertical = 8.dp)) {
+    val shape = RoundedCornerShape(24.dp)
+    Column(
+        Modifier.width(340.dp)
+            .shadow(6.dp, shape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
+            .clip(shape)
+            .background(c.surface)
+            .border(1.dp, c.line.copy(alpha = 0.65f), shape)
+            .padding(vertical = 8.dp)
+    ) {
         Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(L.t("Routes"), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).pressClick { engine.closeAlternatives() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).pressClick { engine.closeAlternatives() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Close, L.t("Close"), tint = c.sub, modifier = Modifier.size(22.dp))
             }
         }
