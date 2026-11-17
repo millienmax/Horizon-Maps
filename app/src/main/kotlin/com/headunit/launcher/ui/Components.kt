@@ -33,6 +33,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.ForkLeft
+import androidx.compose.material.icons.rounded.ForkRight
+import androidx.compose.material.icons.rounded.Merge
+import androidx.compose.material.icons.rounded.RoundaboutLeft
+import androidx.compose.material.icons.rounded.RoundaboutRight
+import androidx.compose.material.icons.rounded.Straight
+import androidx.compose.material.icons.rounded.TurnLeft
+import androidx.compose.material.icons.rounded.TurnRight
+import androidx.compose.material.icons.rounded.UTurnLeft
+import androidx.compose.material.icons.rounded.UTurnRight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.layout.onSizeChanged
@@ -300,7 +311,7 @@ fun roundaboutTurn(inBearing: Double, outBearing: Double): Float {
     return d.toFloat()
 }
 
-/** Turn arrow drawn from the manoeuvre name (no image assets needed). */
+/** Turn arrow drawn using official Google Material Navigation Icons. */
 @Composable
 fun ManeuverArrow(
     maneuver: String,
@@ -312,85 +323,35 @@ fun ManeuverArrow(
     /** The real exit direction at a roundabout (degrees, 0 ahead, 90 right), when the route data has it. */
     exitAngle: Float = Float.NaN,
 ) {
-    Canvas(modifier) {
-        val s = size.minDimension / 48f
-        val sw = 5f * s
-        val u = maneuver.uppercase()
-        val stroke = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        fun p(x: Float, y: Float) = Offset(x * s, y * s)
-        if (u.startsWith("ARRIVE")) {
-            val flag = Path().apply { moveTo(14 * s, 42 * s); lineTo(14 * s, 6 * s) }
-            drawPath(flag, color, style = stroke)
-            val f = Path().apply { moveTo(14 * s, 8 * s); lineTo(38 * s, 8 * s); lineTo(32 * s, 16 * s); lineTo(38 * s, 24 * s); lineTo(14 * s, 24 * s); close() }
-            drawPath(f, color)
-            return@Canvas
+    val u = maneuver.uppercase()
+    val (icon, rot) = androidx.compose.runtime.remember(u, angle) {
+        when {
+            u.startsWith("ARRIVE") -> Icons.Rounded.Flag to 0f
+            u == "MAKE_UTURN" || u == "ROUNDABOUT_BACK" || u == "LEFT_U_TURN" -> Icons.Rounded.UTurnLeft to 0f
+            u == "RIGHT_U_TURN" -> Icons.Rounded.UTurnRight to 0f
+            u.startsWith("ROUNDABOUT") && (u.contains("LEFT") || angle < -20f) -> Icons.Rounded.RoundaboutLeft to 0f
+            u.startsWith("ROUNDABOUT") -> Icons.Rounded.RoundaboutRight to 0f
+            u.contains("MERGE") -> Icons.Rounded.Merge to 0f
+            u.contains("FORK") && u.contains("LEFT") -> Icons.Rounded.ForkLeft to 0f
+            u.contains("FORK") && u.contains("RIGHT") -> Icons.Rounded.ForkRight to 0f
+            u == "TURN_LEFT" -> Icons.Rounded.TurnLeft to 0f
+            u == "TURN_RIGHT" -> Icons.Rounded.TurnRight to 0f
+            u == "SHARP_LEFT" -> Icons.Rounded.TurnLeft to (-20f)
+            u == "SHARP_RIGHT" -> Icons.Rounded.TurnRight to 20f
+            u == "BEAR_LEFT" || u == "KEEP_LEFT" -> Icons.Rounded.TurnLeft to 25f
+            u == "BEAR_RIGHT" || u == "KEEP_RIGHT" -> Icons.Rounded.TurnRight to (-25f)
+            u == "STRAIGHT" || u == "DEPART" || u == "FOLLOW" -> Icons.Rounded.Straight to 0f
+            u.contains("LEFT") -> Icons.Rounded.TurnLeft to 0f
+            u.contains("RIGHT") -> Icons.Rounded.TurnRight to 0f
+            else -> Icons.Rounded.Straight to 0f
         }
-        if (u == "MAKE_UTURN" || u == "ROUNDABOUT_BACK" || u == "LEFT_U_TURN" || u == "RIGHT_U_TURN") {
-            // Direction-specific U-turns: the road stem and return curve mirror for left/right
-            // manoeuvres, while a generic U-turn retains the standard left-return symbol.
-            val rightReturn = u == "RIGHT_U_TURN"
-            val x = if (rightReturn) 16f else 32f
-            val otherX = if (rightReturn) 32f else 16f
-            val startAngle = if (rightReturn) 180f else 0f
-            val sweep = if (rightReturn) 180f else -180f
-            val path = Path().apply {
-                moveTo(x * s, 44 * s); lineTo(x * s, 20 * s)
-                arcTo(Rect(Offset(16 * s, 8 * s), Size(16 * s, 24 * s)), startAngle, sweep, false)
-                lineTo(otherX * s, 30 * s)
-            }
-            drawPath(path, color, style = stroke)
-            val head = Path().apply {
-                if (rightReturn) { moveTo(24 * s, 28 * s); lineTo(40 * s, 28 * s); lineTo(32 * s, 40 * s) }
-                else { moveTo(8 * s, 28 * s); lineTo(24 * s, 28 * s); lineTo(16 * s, 40 * s) }
-                close()
-            }
-            drawPath(head, color)
-            return@Canvas
-        }
-        if (u.startsWith("ROUNDABOUT")) {
-            // The ring with the road you come in on (bottom) and the exit you take, drawn in the direction the real exit
-            // points ([exitAngle] from the route's road bearings when known, otherwise the manoeuvre's left/right/ahead).
-            // The highlighted arc follows the traffic: clockwise where people keep left (UK), anticlockwise elsewhere.
-            // (The exit's number isn't used for the direction: a "2nd exit" can point anywhere, depending on the roundabout.)
-            val cx = 24f; val cy = 25f; val rr = 8f
-            val ringRect = Rect(Offset((cx - rr) * s, (cy - rr) * s), Size(rr * 2f * s, rr * 2f * s))
-            val ringStroke = Stroke(width = 3.5f * s, cap = StrokeCap.Round)
-            drawCircle(color.copy(alpha = 0.3f), rr * s, p(cx, cy), style = ringStroke)
-            drawLine(color, p(24f, 46f), p(24f, cy + rr), sw, StrokeCap.Round)
-            val turn = if (exitAngle.isFinite()) exitAngle else angle
-            // screen angle of the exit on the ring (0 = right, 90 = down, where you come in)
-            val exitDeg = turn - 90f
-            fun wrap(d: Float) = ((d % 360f) + 360f) % 360f
-            var sweep = if (roundaboutClockwise) wrap(exitDeg - 90f) else -wrap(90f - exitDeg)
-            if (kotlin.math.abs(sweep) < 25f) sweep = if (roundaboutClockwise) 335f else -335f // all the way round
-            drawArc(color, 90f, sweep, false, ringRect.topLeft, ringRect.size, style = ringStroke)
-            val endDeg = Math.toRadians((90f + sweep).toDouble())
-            val dx = kotlin.math.cos(endDeg).toFloat()
-            val dy = kotlin.math.sin(endDeg).toFloat()
-            val ex = cx + dx * (rr + 10f); val ey = cy + dy * (rr + 10f)
-            drawLine(color, p(cx + dx * rr, cy + dy * rr), p(ex, ey), sw, StrokeCap.Round)
-            val tip = p(ex + dx * 5f, ey + dy * 5f)
-            val px = -dy; val py = dx
-            val h1 = p(ex - dx * 3f + px * 4.5f, ey - dy * 3f + py * 4.5f)
-            val h2 = p(ex - dx * 3f - px * 4.5f, ey - dy * 3f - py * 4.5f)
-            drawPath(Path().apply { moveTo(tip.x, tip.y); lineTo(h1.x, h1.y); lineTo(h2.x, h2.y); close() }, color)
-            return@Canvas
-        }
-        val r = Math.toRadians(angle.toDouble())
-        val x1 = 24f; val y1 = 28f; val len = 16f
-        val ux = sin(r).toFloat(); val uy = -cos(r).toFloat()
-        val x2 = x1 + ux * len; val y2 = y1 + uy * len
-        if (u.startsWith("ROUNDABOUT")) drawCircle(color, 6f * s, p(24f, 38f), style = Stroke(width = 3f * s))
-        val shaft = Path().apply { moveTo(24 * s, 44 * s); lineTo(x1 * s, y1 * s); lineTo(x2 * s, y2 * s) }
-        drawPath(shaft, color, style = stroke)
-        val px = -uy; val py = ux
-        val hl = 11f; val hw = 9f
-        val tip = p(x2 + ux * hl * 0.6f, y2 + uy * hl * 0.6f)
-        val b1 = p(x2 - ux * hl * 0.4f + px * hw * 0.55f, y2 - uy * hl * 0.4f + py * hw * 0.55f)
-        val b2 = p(x2 - ux * hl * 0.4f - px * hw * 0.55f, y2 - uy * hl * 0.4f - py * hw * 0.55f)
-        val head = Path().apply { moveTo(tip.x, tip.y); lineTo(b1.x, b1.y); lineTo(b2.x, b2.y); close() }
-        drawPath(head, color)
     }
+    Icon(
+        imageVector = icon,
+        contentDescription = maneuver,
+        tint = color,
+        modifier = if (rot != 0f) modifier.graphicsLayer { rotationZ = rot } else modifier
+    )
 }
 
 /** Returns a function that opens the system speech recogniser and passes back the first result. */

@@ -470,8 +470,11 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                     )
                 })
             }
-            railItems.add(@Composable { ImmCompass(engine) })
-            railItems.add(@Composable { ImmIcon(Icons.Rounded.Layers, { sheet = !sheet; if (sheet) soundSheet = false }, active = sheet, desc = L.t("Map options")) })
+            val showNavDetails = !routing || !engine.following
+            if (showNavDetails) {
+                railItems.add(@Composable { ImmCompass(engine) })
+                railItems.add(@Composable { ImmIcon(Icons.Rounded.Layers, { sheet = !sheet; if (sheet) soundSheet = false }, active = sheet, desc = L.t("Map options")) })
+            }
             // Quick sound control (always visible): tap cycles All/Alerts/Mute, long-press opens sound sheet
             railItems.add(@Composable {
                 val soundTint = when (engine.soundMode) {
@@ -488,8 +491,6 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
                     Icon(soundIcon(engine.soundMode), L.t("Sound"), tint = if (soundSheet) Color.White else soundTint, modifier = Modifier.size(24.dp))
                 }
             })
-            // navigating: other ways to go, any time (as in Google Maps): shown in grey on the map with how they compare, tap one to switch
-            if (routing) railItems.add(@Composable { ImmIcon(Icons.Rounded.AltRoute, { engine.findAlternatives() }, desc = L.t("Other routes")) })
             // the demo drive: play to start it; while it plays, its speed (tap for 1x / 2x / 4x), skip to the next turn, and stop
             if (engine.simMode != 0) {
                 railItems.add(@Composable {
@@ -734,8 +735,16 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
             }
         }
 
-        AnimatedVisibility(engine.busy, modifier = Modifier.align(Alignment.TopCenter).padding(top = 22.dp), enter = fadeIn(tween(160)) + androidx.compose.animation.scaleIn(tween(200), initialScale = 0.7f), exit = fadeOut(tween(160))) {
-            Box(Modifier.size(44.dp).panel(6.dp, CircleShape, c.surface), contentAlignment = Alignment.Center) {
+        val busyAlign = if (routing) Alignment.BottomCenter else Alignment.TopCenter
+        val busyPaddingBottom = if (routing) 135.dp else 0.dp
+        val busyPaddingTop = if (routing) 0.dp else 22.dp
+        AnimatedVisibility(
+            engine.busy,
+            modifier = Modifier.align(busyAlign).padding(top = busyPaddingTop, bottom = busyPaddingBottom),
+            enter = fadeIn(tween(160)) + androidx.compose.animation.scaleIn(tween(200), initialScale = 0.7f),
+            exit = fadeOut(tween(160))
+        ) {
+            Box(Modifier.size(44.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(c.surface).border(1.dp, c.line.copy(alpha = 0.5f), CircleShape), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(Modifier.size(24.dp), color = c.accent, strokeWidth = 3.dp)
             }
         }
@@ -1438,7 +1447,7 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
             val rowW = with(dens) { rowPx.toDp() }
             TextSides { Column(
                 Modifier
-                    .then(if (narrow) Modifier.fillMaxWidth().padding(horizontal = 16.dp) else Modifier)
+                    .then(if (narrow) Modifier.fillMaxWidth().padding(horizontal = 8.dp) else Modifier)
                     .shadow(
                         elevation = 6.dp,
                         shape = shape,
@@ -1468,12 +1477,16 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                 }
                 val buttons: @Composable () -> Unit = {
                     // electric: chargers along the route from here
-                    // (voice, sound and stops moved off the card: sound is a big button at the top right, voice and stops are in Map
-                    // options > This trip)
                     if (evPct != null) Box(
                         Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.loadNearby("charging", false) },
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.EvStation, L.t("Chargers ahead"), tint = Good, modifier = Modifier.size(22.dp)) }
+                    Box(
+                        Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.findAlternatives() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.AltRoute, L.t("Other routes"), tint = c.text, modifier = Modifier.size(22.dp))
+                    }
                     Box(
                         Modifier.size(44.dp).clip(btnShape).background(Bad).pressClick { engine.endRoute() },
                         contentAlignment = Alignment.Center
@@ -1492,7 +1505,7 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                     // all fit (an electric car adds a fourth figure and a fifth button), the buttons go on a line under the figures:
                     // squeezed onto one line the figures ran into each other ("21 min14:1216 km75")
                     val nStats = if (evStat) 4 else 3
-                    val nButtons = if (evPct != null) 2 else 1
+                    val nButtons = (if (evPct != null) 1 else 0) + 2
                     val oneLine = maxWidth >= (nStats * 74 + nButtons * 44 + 32).dp
                     val figures: @Composable (Modifier) -> Unit = { m ->
                         Row(m, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -1508,6 +1521,12 @@ private fun TripArea(engine: NavEngine, shareEta: () -> Unit, narrow: Boolean = 
                                 Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.loadNearby("charging", false) },
                                 contentAlignment = Alignment.Center
                             ) { Icon(Icons.Rounded.EvStation, L.t("Chargers ahead"), tint = Good, modifier = Modifier.size(20.dp)) }
+                            Box(
+                                Modifier.size(44.dp).clip(btnShape).background(c.tile).border(1.dp, c.line.copy(alpha = 0.5f), btnShape).pressClick { engine.findAlternatives() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.AltRoute, L.t("Other routes"), tint = c.text, modifier = Modifier.size(22.dp))
+                            }
                             Box(
                                 Modifier.size(44.dp).clip(btnShape).background(Bad).pressClick { engine.endRoute() },
                                 contentAlignment = Alignment.Center
@@ -1709,7 +1728,9 @@ internal fun ImmTurnCard(
     // only runs in the last 80 m, so the screen isn't redrawn constantly the rest of the time
     // read only while drawing, so the pulse repaints the card without recomposing it 60 times a second
     val pulse = rememberPulse(alive && t.dist < 80.0, 650)
-    val turnBg = if (c.dark) androidx.compose.ui.graphics.lerp(Color(0xFF00497D), c.accent, 0.15f * glow) else androidx.compose.ui.graphics.lerp(Color(0xFF0061A4), Color(0xFF00497D), 0.15f * glow)
+    val navGreenDark = Color(0xFF0C563B)
+    val navGreenLight = Color(0xFF0E6E4D)
+    val turnBg = if (c.dark) androidx.compose.ui.graphics.lerp(navGreenDark, Color(0xFF107D57), 0.15f * glow) else androidx.compose.ui.graphics.lerp(navGreenLight, navGreenDark, 0.15f * glow)
     Column(
         Modifier.fillMaxWidth()
             .graphicsLayer { scaleX = grow; scaleY = grow; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f) }
@@ -2423,7 +2444,7 @@ private fun ImmQuick(engine: NavEngine, @Suppress("UNUSED_PARAMETER") showSaved:
     val c = LocalVw.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ParkedCard(engine)
-        val quickBg = if (c.dark) Color(0xFF00497D) else Color(0xFF0061A4)
+        val quickBg = if (c.dark) Color(0xFF0C563B) else Color(0xFF0E6E4D)
         val cardShape = RoundedCornerShape(24.dp)
         engine.resume?.let { rp ->
             Row(
@@ -2499,7 +2520,7 @@ private fun ItineraryCard(engine: NavEngine) {
     val rows = engine.itinerary()
     val shape = RoundedCornerShape(24.dp)
     val c = LocalVw.current
-    val turnBg = if (c.dark) Color(0xFF00497D) else Color(0xFF0061A4)
+    val turnBg = if (c.dark) Color(0xFF0C563B) else Color(0xFF0E6E4D)
     var picked by remember { mutableStateOf(-1) }
     var touched by remember { mutableStateOf(0) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
