@@ -297,11 +297,12 @@ fun App(prefs: Prefs, engine: NavEngine, map: MapBinding) { SafeArea(prefs) { Te
                     NavOverlays(engine, onSettings = { settings = true })
                     if (prefs.b(PreferenceKeys.PERFORMANCE_METER, false) && engine.perfLine.isNotEmpty()) Text(engine.perfLine, color = Color.White, fontSize = 12.sp,
                         modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp).background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
+                    val routing = engine.route != null && !engine.previewing
+                    val showBottomRoadPill = !routing && !engine.deadReckoning && engine.roadNow.isNotBlank() && engine.arrival == null && prefs.b(PreferenceKeys.CRUISE, true)
                     if (engine.deadReckoning) DeadReckoningChip(Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
-                    else if (engine.cruising && engine.following && prefs.b(PreferenceKeys.CRUISE, true)) CruisePill(engine, Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp))
-                    // that pill has the road name, so the one under your arrow steps aside while it's up (they overlapped)
-                    val cruisePillUp = !engine.deadReckoning && engine.cruising && engine.following && prefs.b(PreferenceKeys.CRUISE, true)
-                    LaunchedEffect(cruisePillUp) { map.setRoadNameHidden(cruisePillUp) }
+                    else if (showBottomRoadPill) CruisePill(engine, Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp))
+                    // Outside navigation: hide road pill under arrow; in navigation: show it under arrow
+                    LaunchedEffect(!routing) { map.setRoadNameHidden(!routing) }
                     // coming back from the settings, the map fades up from the background instead of flashing in
                     val back = remember { androidx.compose.animation.core.Animatable(1f) }
                     LaunchedEffect(Unit) { back.animateTo(0f, androidx.compose.animation.core.tween(320)) }

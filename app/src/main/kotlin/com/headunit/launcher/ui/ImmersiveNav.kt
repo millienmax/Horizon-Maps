@@ -74,6 +74,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -2672,25 +2673,38 @@ private fun ImmQuick(engine: NavEngine, @Suppress("UNUSED_PARAMETER") showSaved:
     val c = LocalVw.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ParkedCard(engine)
-        val quickBg = if (c.dark) Color(0xFF0C563B) else Color(0xFF0E6E4D)
-        val cardShape = RoundedCornerShape(24.dp)
+        val quickBg = androidx.compose.ui.graphics.lerp(c.surface, c.accent, if (c.dark) 0.08f else 0.04f)
+        val cardShape = RoundedCornerShape(22.dp)
+        val quickBorder = c.line.copy(alpha = 0.6f)
+
         engine.resume?.let { rp ->
             Row(
                 Modifier.fillMaxWidth()
-                    .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.22f))
+                    .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
                     .clip(cardShape)
                     .background(quickBg)
-                    .border(1.dp, Color.White.copy(alpha = 0.16f), cardShape)
+                    .border(1.dp, quickBorder, cardShape)
                     .clickable { engine.startRoute(rp) }
-                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.Route, null, tint = Color.White, modifier = Modifier.size(26.dp))
-                Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                    Text(L.t("Resume trip to {0}", rp.name), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(L.t("You hadn't arrived when the app closed"), color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                Box(
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(c.accent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Rounded.Route, null, tint = c.accent, modifier = Modifier.size(24.dp))
                 }
-                Icon(Icons.Rounded.Close, L.t("Dismiss"), tint = Color.White, modifier = Modifier.padding(start = 8.dp).size(24.dp).clickable { engine.resume = null; engine.prefs.put(PreferenceKeys.RESUME, "{}") })
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(L.t("Resume trip to {0}", rp.name), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(2.dp))
+                    Text(L.t("You hadn't arrived when the app closed"), color = c.sub, fontSize = 12.sp)
+                }
+                Icon(
+                    Icons.Rounded.Close,
+                    L.t("Dismiss"),
+                    tint = c.sub,
+                    modifier = Modifier.size(24.dp).clickable { engine.resume = null; engine.prefs.put(PreferenceKeys.RESUME, "{}") }
+                )
             }
         }
         // predictive destination with the live journey time (checked again every few minutes while the map is idle)
@@ -2698,41 +2712,77 @@ private fun ImmQuick(engine: NavEngine, @Suppress("UNUSED_PARAMETER") showSaved:
         val pr = engine.prediction?.takeIf { engine.prefs.b(PreferenceKeys.PREDICT, true) }
         if (pr != null) Row(
             Modifier.fillMaxWidth()
-                .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.22f))
+                .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
                 .clip(cardShape)
                 .background(quickBg)
-                .border(1.dp, Color.White.copy(alpha = 0.16f), cardShape)
+                .border(1.dp, quickBorder, cardShape)
                 .clickable { engine.startRoute(pr.place) }
-                .padding(horizontal = 16.dp, vertical = 13.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(when (pr.title) { "Home" -> Icons.Rounded.Home; "Work" -> Icons.Rounded.Work; else -> Icons.Rounded.History }, null, tint = Color.White, modifier = Modifier.size(26.dp))
-            Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                Text(listOfNotNull(pr.title, if (pr.mins >= 0) Geo.fmtDur(pr.mins * 60.0) else null, pr.note.ifBlank { null }).joinToString(" · "),
-                    color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val arrive = if (pr.mins >= 0) L.t("Arrive about ") + com.headunit.launcher.Clock.hm(System.currentTimeMillis() + pr.mins * 60_000L) else pr.place.sub
-                Text(if (pr.delayMin >= 3) L.t("{0} · +{1} min delays", arrive, pr.delayMin) else arrive, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(c.accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(when (pr.title) { "Home" -> Icons.Rounded.Home; "Work" -> Icons.Rounded.Work; else -> Icons.Rounded.History }, null, tint = c.accent, modifier = Modifier.size(24.dp))
             }
-            Text(L.t("Go"), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                Text(listOfNotNull(pr.title, if (pr.mins >= 0) Geo.fmtDur(pr.mins * 60.0) else null, pr.note.ifBlank { null }).joinToString(" · "),
+                    color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                val arrive = if (pr.mins >= 0) L.t("Arrive about ") + com.headunit.launcher.Clock.hm(System.currentTimeMillis() + pr.mins * 60_000L) else pr.place.sub
+                Text(if (pr.delayMin >= 3) L.t("{0} · +{1} min delays", arrive, pr.delayMin) else arrive, color = c.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(c.accent)
+                    .clickable { engine.startRoute(pr.place) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(L.t("Go"), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+            }
         }
         // (Settings "Suggest where you're going" switches this one off too: it used to stay on regardless, GitHub #73)
         val suggestion = remember { engine.habits.suggest(System.currentTimeMillis()) }?.takeIf { engine.prefs.b(PreferenceKeys.PREDICT, true) }
         if (pr == null && suggestion != null) Row(
             Modifier.fillMaxWidth()
-                .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.22f))
+                .shadow(6.dp, cardShape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
                 .clip(cardShape)
                 .background(quickBg)
-                .border(1.dp, Color.White.copy(alpha = 0.16f), cardShape)
+                .border(1.dp, quickBorder, cardShape)
                 .clickable { engine.startRoute(suggestion) }
-                .padding(horizontal = 16.dp, vertical = 13.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.History, null, tint = Color.White, modifier = Modifier.size(26.dp))
-            Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                Text(L.t("Going to {0}?", suggestion.name), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (suggestion.sub.isNotBlank()) Text(suggestion.sub, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(c.accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.History, null, tint = c.accent, modifier = Modifier.size(24.dp))
             }
-            Text(L.t("Go"), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                Text(L.t("Going to {0}?", suggestion.name), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (suggestion.sub.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(suggestion.sub, color = c.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(c.accent)
+                    .clickable { engine.startRoute(suggestion) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(L.t("Go"), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+            }
         }
     }
 }

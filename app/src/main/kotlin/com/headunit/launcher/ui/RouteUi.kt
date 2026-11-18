@@ -389,14 +389,51 @@ fun DeadReckoningChip(modifier: Modifier = Modifier) {
 fun CruisePill(engine: NavEngine, modifier: Modifier = Modifier) {
     val road = engine.roadNow
     val dir = com.headunit.launcher.RouteExtras.compass(engine.fix?.heading ?: 0.0)
-    // light in the day, dark at night, like the map's other cards
     val c = navVw(LocalVw.current)
+    val shape = RoundedCornerShape(50)
     Row(
-        modifier.panel(6.dp, RoundedCornerShape(50), c.surface).border(1.dp, c.line, RoundedCornerShape(50)).padding(horizontal = 18.dp, vertical = 9.dp),
+        modifier
+            .shadow(6.dp, shape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.18f))
+            .clip(shape)
+            .background(c.surface)
+            .border(1.dp, c.line.copy(alpha = 0.6f), shape)
+            .clickable { engine.recenter(byUser = true) }
+            .padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(Icons.Rounded.Navigation, null, tint = c.accent, modifier = Modifier.size(18.dp))
-        Text((if (road.isNotBlank()) "$road · " else "") + L.t("Heading {0}", dir), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(c.accent.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Rounded.Navigation, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
+        }
+        Text(
+            text = road.ifBlank { L.t("Heading {0}", dir) },
+            color = c.text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (road.isNotBlank() && dir.isNotBlank()) {
+            Text(
+                text = "·",
+                color = c.sub.copy(alpha = 0.7f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = L.t("Heading {0}", dir),
+                color = c.sub,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
+        }
     }
 }
 
