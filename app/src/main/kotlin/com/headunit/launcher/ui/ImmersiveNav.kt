@@ -643,13 +643,24 @@ private fun MapScreen(engine: NavEngine, onSettings: () -> Unit) {
         val besideButtons = with(dens) { buttonsWPx.toDp() } + 26.dp
         // (Card positions: on the other side if chosen, and lifted above the trip card when they share a corner)
         val speedShareTrip = !narrow && tripPx > 0 && tripAt == speedAt
+        val showBottomRoadPill = !routing && !previewing && engine.here == null && engine.arrival == null && !engine.deadReckoning && engine.roadNow.isNotBlank() && engine.prefs.b(PreferenceKeys.CRUISE, true)
+        val speedBottomPad by animateDpAsState(
+            targetValue = when {
+                speedShareTrip -> tripH + 8.dp
+                narrow && tripPx > 0 -> tripH + 4.dp
+                showBottomRoadPill -> 76.dp
+                else -> 16.dp
+            },
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+            label = "speedBottomPad"
+        )
         if (!previewing && !searchActive && engine.here == null && engine.arrival == null) Box(
             when {
                 speedOnCardSide -> Modifier.align(if (speedAt == "left") Alignment.BottomStart else Alignment.BottomEnd)
-                    .padding(start = 16.dp, end = 16.dp, bottom = if (speedShareTrip) tripH + 8.dp else 16.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = speedBottomPad)
                 speedPos == "top" -> Modifier.align(side(Alignment.TopEnd)).sides(end = besideButtons, top = 16.dp)
                 speedPos == "middle" -> Modifier.align(side(Alignment.CenterEnd)).sides(end = besideButtons)
-                else -> Modifier.align(side(Alignment.BottomEnd)).sides(end = 16.dp, bottom = if ((narrow || speedShareTrip) && tripPx > 0) tripH + if (narrow) 4.dp else 8.dp else 16.dp)
+                else -> Modifier.align(side(Alignment.BottomEnd)).sides(end = 16.dp, bottom = speedBottomPad)
             }
                 .onGloballyPositioned { val t = it.boundsInParent().top.toInt(); if (it.size.height > 0 && t != speedTopPx) speedTopPx = t }
         ) {

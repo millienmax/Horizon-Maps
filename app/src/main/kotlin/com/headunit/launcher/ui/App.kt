@@ -298,7 +298,8 @@ fun App(prefs: Prefs, engine: NavEngine, map: MapBinding) { SafeArea(prefs) { Te
                     if (prefs.b(PreferenceKeys.PERFORMANCE_METER, false) && engine.perfLine.isNotEmpty()) Text(engine.perfLine, color = Color.White, fontSize = 12.sp,
                         modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp).background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
                     val routing = engine.route != null && !engine.previewing
-                    val showBottomRoadPill = !routing && !engine.deadReckoning && engine.roadNow.isNotBlank() && engine.arrival == null && prefs.b(PreferenceKeys.CRUISE, true)
+                    val previewing = engine.previewing
+                    val showBottomRoadPill = !routing && !previewing && engine.here == null && engine.arrival == null && !engine.deadReckoning && engine.roadNow.isNotBlank() && prefs.b(PreferenceKeys.CRUISE, true)
                     if (engine.deadReckoning) DeadReckoningChip(Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
                     else if (showBottomRoadPill) CruisePill(engine, Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp))
                     // Outside navigation: hide road pill under arrow; in navigation: show it under arrow

@@ -3975,7 +3975,7 @@ class MapBinding(private val ctx: Context, fast: Boolean = false, res: Float = 1
             val below = if (modelOn) (modelPxPerUnit() * (if (carLike) 2.3 else 0.85) * Math.cos(Math.toRadians(tilt))).toFloat()
                         else if (locatorStyle != "flat" && bmp != null) drawnBelowCentre(bmp) * spriteSize()
                         else flatArrow?.let { drawnBelowCentre(it) * (if (theme == "immersive") 0.25f else 0.625f) * arrowScale * Math.cos(Math.toRadians(tilt)).toFloat() } ?: 0f
-            roadView.translationY = pt.y + maxOf(discHalf, below) + 12f * dens
+            roadView.translationY = pt.y + maxOf(discHalf, below) + 15f * dens
             if (roadView.visibility != android.view.View.VISIBLE) roadView.visibility = android.view.View.VISIBLE
         }
         if (modelOn) { gone(v); moveModel(); return }
@@ -4095,39 +4095,39 @@ class MapBinding(private val ctx: Context, fast: Boolean = false, res: Float = 1
     /** The road you're on, in an MD3 Expressive high-contrast pill: deep surface, bold text, shadow and rim border. */
     private fun roadBitmap(name: String): Bitmap {
         val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 38f
+            textSize = 46f
             typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
             color = 0xFFFFFFFF.toInt()
-            letterSpacing = 0.03f
+            letterSpacing = 0.02f
         }
         val txt = if (name.isBlank()) " " else name
-        val maxText = 640f
+        val maxText = 760f
         val shown = if (tp.measureText(txt) > maxText) android.text.TextUtils.ellipsize(txt, android.text.TextPaint(tp), maxText, android.text.TextUtils.TruncateAt.END).toString() else txt
-        val w = tp.measureText(shown) + 68f
-        val hgt = 78f
-        val bmp = Bitmap.createBitmap((w + 24f).toInt(), (hgt + 24f).toInt(), Bitmap.Config.ARGB_8888)
+        val w = tp.measureText(shown) + 84f
+        val hgt = 94f
+        val bmp = Bitmap.createBitmap((w + 28f).toInt(), (hgt + 28f).toInt(), Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        val rect = android.graphics.RectF(12f, 8f, 12f + w, 8f + hgt)
+        val rect = android.graphics.RectF(14f, 10f, 14f + w, 10f + hgt)
         // Soft ambient shadow:
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0x66000000
-            maskFilter = android.graphics.BlurMaskFilter(8f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            maskFilter = android.graphics.BlurMaskFilter(10f, android.graphics.BlurMaskFilter.Blur.NORMAL)
         }
-        c.drawRoundRect(android.graphics.RectF(rect).apply { offset(0f, 5f) }, 26f, 26f, shadowPaint)
+        c.drawRoundRect(android.graphics.RectF(rect).apply { offset(0f, 6f) }, 30f, 30f, shadowPaint)
         // MD3 Expressive High-Contrast Surface (Dark Slate Container):
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xEA161C24.toInt()
         }
-        c.drawRoundRect(rect, 24f, 24f, bgPaint)
+        c.drawRoundRect(rect, 28f, 28f, bgPaint)
         // Subtle translucent border:
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 2.5f
+            strokeWidth = 3f
             color = 0x44FFFFFF
         }
-        c.drawRoundRect(android.graphics.RectF(rect).apply { inset(1.25f, 1.25f) }, 22.75f, 22.75f, borderPaint)
+        c.drawRoundRect(android.graphics.RectF(rect).apply { inset(1.5f, 1.5f) }, 26.5f, 26.5f, borderPaint)
         // Bold white road text:
-        c.drawText(shown, rect.left + 34f, rect.centerY() - (tp.descent() + tp.ascent()) / 2, tp)
+        c.drawText(shown, rect.left + 42f, rect.centerY() - (tp.descent() + tp.ascent()) / 2, tp)
         return bmp
     }
 
