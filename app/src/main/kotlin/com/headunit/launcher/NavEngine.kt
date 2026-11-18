@@ -1275,7 +1275,6 @@ class NavEngine(private val ctx: Context, val prefs: Prefs, val map: MapBinding)
             announcedLimit = n; candidateHits = 0; limitCandidate = -1
             // Settings > Alerts > When the limit changes: chime and voice, the voice alone, or the chime alone
             val how = prefs.s(PreferenceKeys.LIMITCHANGE_HOW, "both")
-            raiseAlert("limit", L.t("Speed limit {0}", n))
             if (how != "voice") chime()
             if (how != "chime") {
                 // after the chime has finished, so the two don't talk over each other (on some units the voice was lost under it)
