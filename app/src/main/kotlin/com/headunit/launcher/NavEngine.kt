@@ -4916,7 +4916,6 @@ class NavEngine(private val ctx: Context, val prefs: Prefs, val map: MapBinding)
         // arrived: at the end of the route and really there (not just level with the end of the route on another road)
         val atEnd = rem < 25 && fix.let { f -> f == null || Geo.dist(f.pos, dest?.pos ?: r.pts.last()) < 120.0 || Geo.dist(f.pos, r.pts.last()) < 120.0 }
         if (atEnd && said.add("end")) {
-            toast(L.t("You have arrived"), 5000)
             if (navStartMs > 0) {
                 val secsT = (System.currentTimeMillis() - navStartMs) / 1000.0
                 val dd = max(0.0, tripDist - navStartDist)
